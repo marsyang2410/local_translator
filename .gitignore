@@ -1,0 +1,28 @@
+# Xcode
+#
+# gitignore contributors: add more item if needed
+
+## Build results
+build/
+DerivedData/
+
+## OS X
+.DS_Store
+
+## Errors
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+## Package Managers
+.swiftpm/
+.build/
+
+## Whisper.cpp models and samples
+**/*.bin
+**/*.wav
+!whisper.swiftui.demo/Resources/samples/jfk.wav
+
+## Extra ignores
+LocalTranslatorApp/whisper.swiftui.xcodeproj/project.xcworkspace/
+LocalTranslatorApp/whisper.swiftui.xcodeproj/xcuserdata/
