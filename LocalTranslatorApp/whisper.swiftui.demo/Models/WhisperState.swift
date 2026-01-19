@@ -161,37 +161,7 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         canTranscribe = true
     }
     
-    /// Translate transcribed text and speak the result
-    private func translateAndSpeak(text: String) async {
-        messageLog += "🔄 Request: \(currentSourceLanguage) -> \(currentTargetLanguage)\n"
-        
-        // Skip if languages are the same
-        if currentSourceLanguage == currentTargetLanguage {
-            messageLog += "ℹ️ Source and Target languages are the same. Speaking original text.\n"
-            translatedText = text
-            speakLastTranslation()
-            return
-        }
-        
-        messageLog += "🔄 Translating \(currentSourceLanguage) -> \(currentTargetLanguage)...\n"
-        
-        // Translate using explicit direction
-        if let translated = await translationManager.translate(text: text, from: currentSourceLanguage, to: currentTargetLanguage) {
-            
-            // Check if translation returned identical text (simulating failure or no-op)
-            if translated.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) == text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
-                messageLog += "⚠️ Warning: Translation returned identical text. Model may not be downloaded or language pair unsupported.\n"
-            }
-            
-            translatedText = translated
-            messageLog += "✅ Translation: \(translated)\n"
-            
-            // Speak in target language
-            speakLastTranslation()
-        } else {
-            messageLog += "❌ Translation failed\n"
-        }
-    }
+
     
     /// Repeats the last spoken translation
     func speakLastTranslation() {
@@ -213,7 +183,7 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
     }
     
     func speak(text: String, language: String) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else { return }
         
         if isPlayingTTS {
             stopTTS()

@@ -16,7 +16,9 @@
 		0AAC5D9F29539CD0003032C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0AAC5D9E29539CD0003032C3 /* Assets.xcassets */; };
 		0AAC5DCE2953A05C003032C3 /* WhisperState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AAC5DCD2953A05C003032C3 /* WhisperState.swift */; };
 		0AAC5DD12953A394003032C3 /* LibWhisper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AAC5DD02953A394003032C3 /* LibWhisper.swift */; };
-		0E23A7DD2F1D04D30023C310 /* TranslationManager 2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E23A7DC2F1D04D30023C310 /* TranslationManager 2.swift */; };
+		0E23A7E12F1D0A3B0023C311 /* TranslationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E23A7E02F1D0A3B0023C311 /* TranslationManager.swift */; };
+
+
 		0E23A7DF2F1D0A2A0023C310 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E23A7DE2F1D0A2A0023C310 /* ContentView.swift */; };
 		5B3454FF2D8178F80005A3BC /* whisper.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5B3454FE2D8178F80005A3BC /* whisper.xcframework */; };
 		5B3455002D8178F80005A3BC /* whisper.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5B3454FE2D8178F80005A3BC /* whisper.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -50,7 +52,9 @@
 		0AAC5DA029539CD0003032C3 /* WhisperCppDemo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WhisperCppDemo.entitlements; sourceTree = "<group>"; };
 		0AAC5DCD2953A05C003032C3 /* WhisperState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperState.swift; sourceTree = "<group>"; };
 		0AAC5DD02953A394003032C3 /* LibWhisper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibWhisper.swift; sourceTree = "<group>"; };
-		0E23A7DC2F1D04D30023C310 /* TranslationManager 2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TranslationManager 2.swift"; sourceTree = "<group>"; };
+		0E23A7E02F1D0A3B0023C311 /* TranslationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationManager.swift; sourceTree = "<group>"; };
+
+
 		0E23A7DE2F1D0A2A0023C310 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		5B3454FE2D8178F80005A3BC /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = "../../build-apple/whisper.xcframework"; sourceTree = "<group>"; };
 		7F79E0ED2CE0A78000ACD7BF /* DownloadButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadButton.swift; sourceTree = "<group>"; };
@@ -73,8 +77,10 @@
 			isa = PBXGroup;
 			children = (
 				0AAC5DCD2953A05C003032C3 /* WhisperState.swift */,
+				0E23A7E02F1D0A3B0023C311 /* TranslationManager.swift */,
+
 				7F79E0EF2CE0C6F700ACD7BF /* Model.swift */,
-				0E23A7DC2F1D04D30023C310 /* TranslationManager 2.swift */,
+
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -245,7 +251,9 @@
 				0AAC5DD12953A394003032C3 /* LibWhisper.swift in Sources */,
 				0AA7514C2953B569001EE061 /* RiffWaveUtils.swift in Sources */,
 				0E23A7DF2F1D0A2A0023C310 /* ContentView.swift in Sources */,
-				0E23A7DD2F1D04D30023C310 /* TranslationManager 2.swift in Sources */,
+				0E23A7E12F1D0A3B0023C311 /* TranslationManager.swift in Sources */,
+
+
 				0AA7514E2953D958001EE061 /* Recorder.swift in Sources */,
 				7F79E0F02CE0C6F700ACD7BF /* Model.swift in Sources */,
 			);

@@ -242,7 +242,7 @@ struct ContentView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showModels) {
-                ModelsView(whisperState: whisperState)
+                SettingsView(whisperState: whisperState)
             }
             // MARK: - Translation Logic
             // When transcription completes, translate using stored session OR trigger a new one
@@ -379,12 +379,165 @@ struct PersonControls: View {
     }
 }
 
+struct SettingsView: View {
+    @ObservedObject var whisperState: WhisperState
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                Section(header: Text("Model Management")) {
+                    NavigationLink(destination: ModelsView(whisperState: whisperState)) {
+                        Label("Whisper Models (STT)", systemImage: "waveform")
+                    }
+                    
+                    NavigationLink(destination: LanguageSettingsView(whisperState: whisperState)) {
+                        Label("Translation Languages", systemImage: "translate")
+                    }
+                }
+                
+                Section(header: Text("About")) {
+                    HStack {
+                        Text("Version")
+                        Spacer()
+                        Text("1.0.0")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+@available(iOS 17.4, *)
+struct LanguageSettingsView: View {
+    @ObservedObject var whisperState: WhisperState
+    @State private var supportedLanguages: [Locale.Language] = []
+    @State private var installedLanguages: Set<String> = []
+    @State private var isLoading = true
+    
+    // Config to trigger the system download popup
+    @State private var downloadConfig: TranslationSession.Configuration?
+    
+    // We'll use a standard list of languages to check against
+    private let commonLanguageCodes = ["en", "es", "fr", "de", "zh", "ja", "it", "pt", "ko", "ru"]
+    
+    var body: some View {
+        List {
+            Section(header: Text("On-Device Models")) {
+                if isLoading {
+                    ProgressView("Checking availability...")
+                } else {
+                    ForEach(commonLanguageCodes, id: \.self) { code in
+                        LanguageRowButton(code: code, isInstalled: installedLanguages.contains(code)) {
+                             // Trigger system download by initiating a dummy session
+                             downloadConfig = TranslationSession.Configuration(
+                                 source: Locale.Language(identifier: "en"),
+                                 target: Locale.Language(identifier: code)
+                             )
+                        }
+                    }
+                }
+            }
+            
+            Section(footer: Text("Tap a language to download it for offline use using the system dialog.")) {
+                EmptyView()
+            }
+        }
+        .navigationTitle("Translation")
+        .task {
+            await checkLanguageStatus()
+        }
+        // This task triggers the system UI for downloading models if they are missing
+        .translationTask(downloadConfig) { session in
+            do {
+                try await session.prepareTranslation()
+                // Refresh status after interaction
+                await checkLanguageStatus()
+            } catch {
+                print("Download cancelled or failed: \(error)")
+            }
+        }
+    }
+    
+    private func checkLanguageStatus() async {
+        isLoading = true
+        let availability = LanguageAvailability()
+        
+        var installed = Set<String>()
+        
+        for code in commonLanguageCodes {
+            let target = Locale.Language(identifier: code)
+            // Check if it's installed for translation from/to English as a baseline
+            let status = await availability.status(from: .init(identifier: "en"), to: target)
+            
+            if status == .installed || code == "en" {
+                installed.insert(code)
+            }
+        }
+        
+        installedLanguages = installed
+        isLoading = false
+    }
+}
+
+struct LanguageRowButton: View {
+    let code: String
+    let isInstalled: Bool
+    let action: () -> Void
+    
+    var name: String {
+        Locale.current.localizedString(forLanguageCode: code) ?? code.uppercased()
+    }
+    
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(name)
+                    .font(.body)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                if isInstalled {
+                    Text("Downloaded")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                } else {
+                    Text("Download")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    Image(systemName: "icloud.and.arrow.down")
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+        .disabled(isInstalled) // Don't click if already downloaded
+    }
+}
+
 struct ModelsView: View {
     @ObservedObject var whisperState: WhisperState
     @Environment(\.dismiss) var dismiss
     
     // Model definitions
     private static let models: [WhisperModelDescriptor] = [
+        // Quantized Models (Fastest) - Best for "VOSK-like" speed
+        WhisperModelDescriptor(name: "Tiny (Fast) ⚡️", info: "English (Q5_1, ~31 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin", filename: "tiny.en-q5_1.bin"),
+        WhisperModelDescriptor(name: "Base (Fast) ⚡️", info: "English (Q5_1, ~57 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q5_1.bin", filename: "base.en-q5_1.bin"),
+        WhisperModelDescriptor(name: "Small (Fast) ⚡️", info: "English (Q5_1, ~180 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin", filename: "small.en-q5_1.bin"),
+        
+        // Standard Models (Higher Precision)
         WhisperModelDescriptor(name: "tiny", info: "(F16, 75 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin", filename: "tiny.bin"),
         WhisperModelDescriptor(name: "tiny.en", info: "(F16, 75 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin", filename: "tiny.en.bin"),
         WhisperModelDescriptor(name: "base", info: "(F16, 142 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin", filename: "base.bin"),
@@ -427,17 +580,19 @@ struct WhisperModelDescriptor: Identifiable, Equatable {
 }
 
 // Download Button Component
+// Download Button Component
 struct DownloadButton: View {
     let model: WhisperModelDescriptor
     @ObservedObject var whisperState: WhisperState
     var onLoad: ((WhisperModelDescriptor) -> Void)?
     
-    @State private var status: DownloadStatus = .unknown
+    @State private var status: DownloadStatus = .cloud
     @State private var progress: Double = 0.0
     @State private var downloadTask: URLSessionDownloadTask?
+    @State private var progressObservation: NSKeyValueObservation?
     
     enum DownloadStatus {
-        case unknown
+        case cloud
         case downloading
         case downloaded
         case error
@@ -445,35 +600,70 @@ struct DownloadButton: View {
     
     var body: some View {
         HStack {
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(model.name)
                     .font(.headline)
                 Text(model.info)
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
             }
             
             Spacer()
             
-            switch status {
-            case .downloading:
-                ProgressView(value: progress)
-                    .progressViewStyle(LinearProgressViewStyle())
-                    .frame(width: 100)
-            case .downloaded:
-                Button("Load") {
-                    onLoad?(model)
+            ZStack {
+                switch status {
+                case .cloud, .error:
+                    Button(action: downloadModel) {
+                        Image(systemName: "icloud.and.arrow.down")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                    .buttonStyle(.plain)
+                    
+                case .downloading:
+                    Button(action: cancelDownload) {
+                        ZStack {
+                            Circle()
+                                .stroke(Color(.systemGray5), lineWidth: 3)
+                                .frame(width: 32, height: 32)
+                            
+                            Circle()
+                                .trim(from: 0, to: progress)
+                                .stroke(Color.blue, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                                .frame(width: 32, height: 32)
+                                .rotationEffect(.degrees(-90))
+                            
+                            Rectangle()
+                                .fill(Color.blue)
+                                .frame(width: 10, height: 10)
+                                .cornerRadius(2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    
+                case .downloaded:
+                    Button(action: { onLoad?(model) }) {
+                        Text("LOAD")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(Color(.systemGray6))
+                            .foregroundColor(.blue)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .fixedSize()
                 }
-                .buttonStyle(.borderedProminent)
-            case .unknown, .error:
-                Button("Download") {
-                    downloadModel()
-                }
-                .buttonStyle(.bordered)
             }
+            .frame(minWidth: 70)
+            .contentShape(Rectangle())
         }
+        .padding(.vertical, 8)
         .onAppear {
             checkStatus()
+        }
+        .onDisappear {
+            progressObservation?.invalidate()
         }
     }
     
@@ -481,7 +671,7 @@ struct DownloadButton: View {
         if FileManager.default.fileExists(atPath: model.fileURL.path) {
             status = .downloaded
         } else {
-            status = .unknown
+            status = .cloud
         }
     }
     
@@ -489,31 +679,52 @@ struct DownloadButton: View {
         guard let url = URL(string: model.url) else { return }
         
         status = .downloading
+        progress = 0.0
         
         // Create directory if needed
         try? FileManager.default.createDirectory(at: model.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         
-        _ = downloadTask?.progress.observe(\.fractionCompleted) { observation, _ in
-            DispatchQueue.main.async {
-                progress = observation.fractionCompleted
+        let task = URLSession.shared.downloadTask(with: url) { localURL, response, error in
+            if let localURL = localURL {
+                // Success
+                try? FileManager.default.removeItem(at: model.fileURL) // Clean old if exists
+                try? FileManager.default.moveItem(at: localURL, to: model.fileURL)
+                DispatchQueue.main.async {
+                    self.status = .downloaded
+                    self.progressObservation?.invalidate()
+                }
+            } else if let error = (error as NSError?), error.code == NSURLErrorCancelled {
+                // Cancelled
+                DispatchQueue.main.async {
+                    self.status = .cloud
+                    self.progress = 0.0
+                }
+            } else {
+                // Error
+                DispatchQueue.main.async {
+                    self.status = .error
+                    self.progressObservation?.invalidate()
+                }
             }
         }
         
-        let task = URLSession.shared.downloadTask(with: url) { localURL, response, error in
-            if let localURL = localURL {
-                try? FileManager.default.moveItem(at: localURL, to: model.fileURL)
-                DispatchQueue.main.async {
-                    status = .downloaded
-                }
-            } else {
-                DispatchQueue.main.async {
-                    status = .error
-                }
+        // Setup Progress Observation
+        progressObservation = task.progress.observe(\.fractionCompleted) { obs, _ in
+            DispatchQueue.main.async {
+                self.progress = obs.fractionCompleted
             }
         }
         
         downloadTask = task
         task.resume()
+    }
+    
+    private func cancelDownload() {
+        downloadTask?.cancel()
+        progressObservation?.invalidate()
+        downloadTask = nil
+        status = .cloud
+        progress = 0.0
     }
 }
 

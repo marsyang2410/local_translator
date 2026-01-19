@@ -9,6 +9,7 @@
 import Foundation
 import Translation
 import AVFoundation
+import NaturalLanguage
 
 @MainActor
 class TranslationManager: ObservableObject {
@@ -19,60 +20,8 @@ class TranslationManager: ObservableObject {
     
     private let speechSynthesizer = AVSpeechSynthesizer()
     
-    /// Translates text from source language to target language
-    /// - Parameters:
-    ///   - text: The source text to translate
-    ///   - sourceLanguage: Source language code (e.g., "es" for Spanish)
-    ///   - targetLanguage: Target language code (e.g., "en" for English)
-    /// - Returns: Translated text or nil if translation fails
-    func translate(text: String, from sourceLanguage: String, to targetLanguage: String) async -> String? {
-        guard !text.isEmpty else { return nil }
-        
-        isTranslating = true
-        defer { isTranslating = false }
-        
-        do {
-            // Create translation configuration
-            let configuration = TranslationSession.Configuration(
-                source: Locale.Language(identifier: sourceLanguage),
-                target: Locale.Language(identifier: targetLanguage)
-            )
-            
-            let session = TranslationSession(configuration: configuration)
-            
-            // Perform translation
-            let response = try await session.translate(text)
-            translatedText = response.targetText
-            
-            print("✅ Translation: '\(text)' → '\(response.targetText)'")
-            return response.targetText
-            
-        } catch {
-            print("❌ Translation error: \(error.localizedDescription)")
-            return nil
-        }
-    }
-    
-    /// Auto-detect language and translate to English
+    /// Auto-detect language
     /// - Parameter text: The source text to translate
-    /// - Returns: Translated English text or nil if translation fails
-    func translateToEnglish(text: String) async -> String? {
-        // Detect language first
-        let detectedLang = detectLanguage(text: text)
-        detectedLanguage = detectedLang
-        
-        // If already English, return as-is
-        if detectedLang == "en" {
-            print("ℹ️ Text is already in English")
-            return text
-        }
-        
-        // Translate to English
-        return await translate(text: text, from: detectedLang, to: "en")
-    }
-    
-    /// Detect the language of the given text
-    /// - Parameter text: Text to analyze
     /// - Returns: Language code (e.g., "es", "en", "fr")
     func detectLanguage(text: String) -> String {
         let recognizer = NLLanguageRecognizer()
