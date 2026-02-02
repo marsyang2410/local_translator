@@ -13,6 +13,10 @@ struct ContentView: View {
     // Mode selection
     @State private var isSoloMode = false // true = Solo mode (normal orientation), false = Duo mode (face-to-face)
     
+    // Text editing
+    @State private var showEditSheet = false
+    @State private var editingText = ""
+    
     // Interaction state
     @State private var isRecordingTop = false
     @State private var isRecordingBottom = false
@@ -93,30 +97,51 @@ struct ContentView: View {
                         let topOutput = isTopSpeech ? whisperState.transcribedText : whisperState.translatedText
                         
                         if !topOutput.isEmpty && !isRecordingBottom {
-                             HStack {
-                                 // 1. TTS Button (Pronunciation)
-                                 Button(action: { whisperState.speak(text: topOutput, language: topLanguage) }) {
-                                     Image(systemName: whisperState.isPlayingTTS ? "stop.circle.fill" : "speaker.wave.2.circle.fill")
-                                         .font(.title)
+                             VStack(spacing: 8) {
+                                 HStack {
+                                     // 1. TTS Button (Pronunciation)
+                                     Button(action: { whisperState.speak(text: topOutput, language: topLanguage) }) {
+                                         Image(systemName: whisperState.isPlayingTTS ? "stop.circle.fill" : "speaker.wave.2.circle.fill")
+                                             .font(.title)
+                                             .foregroundColor(topColor)
+                                     }
+                                     .padding(.trailing, 8)
+                                     
+                                     // 2. User Recording Button (Original Voice)
+                                     Button(action: { whisperState.playLastRecording() }) {
+                                         Image(systemName: whisperState.isPlayingAudio ? "stop.circle.fill" : "waveform.circle.fill")
+                                             .font(.title)
+                                             .foregroundColor(isTopSpeech ? topColor : .gray)
+                                     }
+                                     .disabled(!isTopSpeech)
+                                     
+                                     Text(topOutput)
+                                        .font(.title3)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(topColor)
+                                        .padding()
+                                        .background(Color.white.opacity(0.8))
+                                        .cornerRadius(12)
+                                 }
+                                 
+                                 // Edit button (only show for transcribed text, not translation)
+                                 if isTopSpeech {
+                                     Button(action: {
+                                         editingText = whisperState.transcribedText
+                                         showEditSheet = true
+                                     }) {
+                                         HStack(spacing: 4) {
+                                             Image(systemName: "pencil.circle.fill")
+                                             Text("Edit")
+                                         }
+                                         .font(.caption)
                                          .foregroundColor(topColor)
+                                         .padding(.horizontal, 12)
+                                         .padding(.vertical, 4)
+                                         .background(Color.white.opacity(0.6))
+                                         .cornerRadius(12)
+                                     }
                                  }
-                                 .padding(.trailing, 8)
-                                 
-                                 // 2. User Recording Button (Original Voice)
-                                 Button(action: { whisperState.playLastRecording() }) {
-                                     Image(systemName: whisperState.isPlayingAudio ? "stop.circle.fill" : "waveform.circle.fill")
-                                         .font(.title)
-                                         .foregroundColor(isTopSpeech ? topColor : .gray)
-                                 }
-                                 .disabled(!isTopSpeech)
-                                 
-                                 Text(topOutput)
-                                    .font(.title3)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(topColor)
-                                    .padding()
-                                    .background(Color.white.opacity(0.8))
-                                    .cornerRadius(12)
                              }
                              .rotationEffect(.degrees(isSoloMode ? 0 : 180))
                         }
@@ -194,29 +219,50 @@ struct ContentView: View {
                         let bottomOutput = isTopSpeech ? whisperState.translatedText : whisperState.transcribedText
                         
                         if !bottomOutput.isEmpty && !isRecordingTop {
-                             HStack {
-                                 Text(bottomOutput)
-                                    .font(.title3)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(bottomColor)
-                                    .padding()
-                                    .background(Color.white.opacity(0.8))
-                                    .cornerRadius(12)
-                                 
-                                 // 1. User Recording Button (Original Voice)
-                                 Button(action: { whisperState.playLastRecording() }) {
-                                     Image(systemName: whisperState.isPlayingAudio ? "stop.circle.fill" : "waveform.circle.fill")
-                                         .font(.title)
-                                         .foregroundColor(!isTopSpeech ? bottomColor : .gray)
-                                 }
-                                 .disabled(isTopSpeech)
-                                 .padding(.trailing, 8)
+                             VStack(spacing: 8) {
+                                 HStack {
+                                     Text(bottomOutput)
+                                        .font(.title3)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(bottomColor)
+                                        .padding()
+                                        .background(Color.white.opacity(0.8))
+                                        .cornerRadius(12)
+                                     
+                                     // 1. User Recording Button (Original Voice)
+                                     Button(action: { whisperState.playLastRecording() }) {
+                                         Image(systemName: whisperState.isPlayingAudio ? "stop.circle.fill" : "waveform.circle.fill")
+                                             .font(.title)
+                                             .foregroundColor(!isTopSpeech ? bottomColor : .gray)
+                                     }
+                                     .disabled(isTopSpeech)
+                                     .padding(.trailing, 8)
 
-                                 // 2. TTS Button (Pronunciation)
-                                 Button(action: { whisperState.speak(text: bottomOutput, language: bottomLanguage) }) {
-                                     Image(systemName: whisperState.isPlayingTTS ? "stop.circle.fill" : "speaker.wave.2.circle.fill")
-                                         .font(.title)
+                                     // 2. TTS Button (Pronunciation)
+                                     Button(action: { whisperState.speak(text: bottomOutput, language: bottomLanguage) }) {
+                                         Image(systemName: whisperState.isPlayingTTS ? "stop.circle.fill" : "speaker.wave.2.circle.fill")
+                                             .font(.title)
+                                             .foregroundColor(bottomColor)
+                                     }
+                                 }
+                                 
+                                 // Edit button (only show for transcribed text, not translation)
+                                 if !isTopSpeech {
+                                     Button(action: {
+                                         editingText = whisperState.transcribedText
+                                         showEditSheet = true
+                                     }) {
+                                         HStack(spacing: 4) {
+                                             Image(systemName: "pencil.circle.fill")
+                                             Text("Edit")
+                                         }
+                                         .font(.caption)
                                          .foregroundColor(bottomColor)
+                                         .padding(.horizontal, 12)
+                                         .padding(.vertical, 4)
+                                         .background(Color.white.opacity(0.6))
+                                         .cornerRadius(12)
+                                     }
                                  }
                              }
                         }
@@ -265,6 +311,16 @@ struct ContentView: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $showModels) {
                 SettingsView(whisperState: whisperState)
+            }
+            .sheet(isPresented: $showEditSheet) {
+                TextEditorSheet(
+                    text: $editingText,
+                    isPresented: $showEditSheet,
+                    onSave: {
+                        whisperState.transcribedText = editingText
+                        // Translation will auto-trigger via .onChange
+                    }
+                )
             }
             // MARK: - Translation Logic
             // When transcription completes, translate using stored session OR trigger a new one
@@ -645,6 +701,97 @@ struct VoiceRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             onSelect()
+        }
+    }
+}
+
+// MARK: - Text Editor Sheet
+
+struct TextEditorSheet: View {
+    @Binding var text: String
+    @Binding var isPresented: Bool
+    var onSave: () -> Void
+    
+    @State private var editedText: String = ""
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Info banner
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.blue)
+                        .font(.body)
+                    Text("Edit the transcribed text to fix any errors")
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    Color.blue.opacity(0.1)
+                        .ignoresSafeArea(edges: .top)
+                )
+                
+                // Text editor
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $editedText)
+                        .focused($isFocused)
+                        .font(.body)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    
+                    if editedText.isEmpty {
+                        Text("Type your text here...")
+                            .foregroundColor(.gray.opacity(0.5))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 16)
+                            .allowsHitTesting(false)
+                    }
+                }
+                
+                Divider()
+                
+                // Character count
+                HStack {
+                    Text("\(editedText.count) characters")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color(UIColor.secondarySystemBackground))
+            }
+            .navigationTitle("Edit Text")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        text = editedText
+                        onSave()
+                        isPresented = false
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(editedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onAppear {
+                editedText = text
+                // Auto-focus the text editor
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isFocused = true
+                }
+            }
         }
     }
 }
