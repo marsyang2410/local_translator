@@ -26,3 +26,5 @@ DerivedData/
 ## Extra ignores
 LocalTranslatorApp/whisper.swiftui.xcodeproj/project.xcworkspace/
 LocalTranslatorApp/whisper.swiftui.xcodeproj/xcuserdata/
+
+.github/copilot-instructions.md

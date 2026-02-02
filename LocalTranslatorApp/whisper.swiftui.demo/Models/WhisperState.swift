@@ -33,6 +33,9 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
     private let synthesizer = AVSpeechSynthesizer()
     private let translationManager = TranslationManager()
     
+    // Store user preferences for voice per language code
+    @Published var preferredVoices: [String: String] = [:]
+    
     private var builtInModelUrl: URL? {
         Bundle.main.url(forResource: "ggml-base", withExtension: "bin", subdirectory: "models")
     }
@@ -166,20 +169,7 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
     /// Repeats the last spoken translation
     func speakLastTranslation() {
         guard !translatedText.isEmpty else { return }
-        
-        if isPlayingTTS {
-            stopTTS()
-            return
-        }
-        
-        // Switch to Playback mode for better quality
-        setupAudioSession(isRecording: false)
-        
-        let locale = translationManager.speechLocale(for: currentTargetLanguage)
-        let utterance = AVSpeechUtterance(string: translatedText)
-        utterance.voice = AVSpeechSynthesisVoice(language: locale)
-        utterance.rate = 0.5
-        synthesizer.speak(utterance)
+        speak(text: translatedText, language: currentTargetLanguage)
     }
     
     func speak(text: String, language: String) {
@@ -193,11 +183,36 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         prepareForPlayback()
         
         let utterance = AVSpeechUtterance(string: text)
-        if let voice = AVSpeechSynthesisVoice(language: language) {
+        
+        // Check for user-selected voice preference first
+        if let preferredVoiceId = preferredVoices[language],
+           let voice = AVSpeechSynthesisVoice(identifier: preferredVoiceId) {
             utterance.voice = voice
+        } else {
+            // Auto-select best quality voice available
+            let allVoices = AVSpeechSynthesisVoice.speechVoices()
+            let languageVoices = allVoices.filter { $0.language.starts(with: language) }
+            
+            // Prioritize: Premium > Enhanced > Default
+            if let premium = languageVoices.first(where: { $0.quality == .premium }) {
+                utterance.voice = premium
+            } else if let enhanced = languageVoices.first(where: { $0.quality == .enhanced }) {
+                utterance.voice = enhanced
+            } else if let defaultVoice = AVSpeechSynthesisVoice(language: language) {
+                utterance.voice = defaultVoice
+            }
         }
+        
         utterance.rate = 0.5
         synthesizer.speak(utterance)
+    }
+    
+    func setVoice(_ identifier: String, for languageCode: String) {
+        preferredVoices[languageCode] = identifier
+    }
+    
+    func getVoiceHeight(for languageCode: String) -> String? {
+        return preferredVoices[languageCode]
     }
     
     func stopTTS() {

@@ -10,7 +10,8 @@ struct ContentView: View {
     @State private var topLanguage = "es" // Person A (e.g. Spanish)
     @State private var bottomLanguage = "en" // Person B (e.g. English)
     
-    
+    // Mode selection
+    @State private var isSoloMode = false // true = Solo mode (normal orientation), false = Duo mode (face-to-face)
     
     // Interaction state
     @State private var isRecordingTop = false
@@ -53,7 +54,7 @@ struct ContentView: View {
                             }
                         }
                         .pickerStyle(MenuPickerStyle())
-                        .rotationEffect(.degrees(180))
+                        .rotationEffect(.degrees(isSoloMode ? 0 : 180))
                         
                         // Action Controls (Rotated)
                         PersonControls(
@@ -81,7 +82,7 @@ struct ContentView: View {
                                 Task { await whisperState.cancelRecording() }
                             }
                         )
-                        .rotationEffect(.degrees(180))
+                        .rotationEffect(.degrees(isSoloMode ? 0 : 180))
                         
                         // Result Display (Rotated)
                         // Shows what Bottom person said (translated to Top language)
@@ -117,7 +118,7 @@ struct ContentView: View {
                                     .background(Color.white.opacity(0.8))
                                     .cornerRadius(12)
                              }
-                             .rotationEffect(.degrees(180))
+                             .rotationEffect(.degrees(isSoloMode ? 0 : 180))
                         }
                     }
                     .padding()
@@ -151,6 +152,27 @@ struct ContentView: View {
                                 .font(.title2)
                                 .foregroundColor(.blue)
                         }
+                    }
+                    
+                    Spacer()
+                    
+                    // Solo/Duo Mode Toggle
+                    Button(action: {
+                        withAnimation {
+                            isSoloMode.toggle()
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: isSoloMode ? "person.fill" : "person.2.fill")
+                            Text(isSoloMode ? "Solo" : "Duo")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundColor(isSoloMode ? .green : .purple)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(isSoloMode ? Color.green.opacity(0.1) : Color.purple.opacity(0.1))
+                        .cornerRadius(20)
                     }
                     
                     Spacer()
@@ -394,6 +416,10 @@ struct SettingsView: View {
                     NavigationLink(destination: LanguageSettingsView(whisperState: whisperState)) {
                         Label("Translation Languages", systemImage: "translate")
                     }
+                    
+                    NavigationLink(destination: VoiceSettingsView(whisperState: whisperState)) {
+                        Label("Text-to-Speech Voices", systemImage: "speaker.wave.2")
+                    }
                 }
                 
                 Section(header: Text("About")) {
@@ -413,6 +439,212 @@ struct SettingsView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+struct VoiceSettingsView: View {
+    @ObservedObject var whisperState: WhisperState
+    @State private var voices: [String: [AVSpeechSynthesisVoice]] = [:]
+    @State private var playingVoiceId: String?
+    private let synthesizer = AVSpeechSynthesizer()
+    
+    // Map language codes to sample text
+    private let sampleTexts: [String: String] = [
+        "en": "Hello, how are you today?",
+        "es": "Hola, ¿cómo estás hoy?",
+        "fr": "Bonjour, comment allez-vous?",
+        "de": "Hallo, wie geht es dir?",
+        "zh": "你好，你今天好吗？",
+        "ja": "こんにちは、お元気ですか？",
+        "it": "Ciao, come stai oggi?",
+        "pt": "Olá, como você está hoje?"
+    ]
+    
+    // We'll filter for the languages we support in the app
+    private let supportedLanguageCodes = ["en", "es", "fr", "de", "zh", "ja", "it", "pt"]
+    
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(.blue)
+                        Text("Improve Voice Quality")
+                            .font(.headline)
+                    }
+                    Text("Tap ▶️ to preview voices. Select Premium/Enhanced for more natural sound. To add more voices, go to iOS Settings → Accessibility → Spoken Content → Voices.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+            
+            ForEach(supportedLanguageCodes, id: \.self) { langCode in
+                Section(header: Text(languageName(for: langCode))) {
+                    if let languageVoices = voices[langCode], !languageVoices.isEmpty {
+                        ForEach(languageVoices, id: \.identifier) { voice in
+                            VoiceRow(
+                                voice: voice,
+                                langCode: langCode,
+                                isSelected: whisperState.getVoiceHeight(for: langCode) == voice.identifier,
+                                isPlaying: playingVoiceId == voice.identifier,
+                                onSelect: {
+                                    whisperState.setVoice(voice.identifier, for: langCode)
+                                },
+                                onPreview: {
+                                    playingVoiceId = voice.identifier
+                                    playSample(voice: voice, langCode: langCode)
+                                }
+                            )
+                        }
+                    } else {
+                        Text("No voices available for this language")
+                            .foregroundColor(.secondary)
+                            .italic()
+                    }
+                }
+            }
+            
+            Section(footer: VStack(alignment: .leading, spacing: 12) {
+                Text("💡 To download more high-quality voices:")
+                    .font(.footnote)
+                    .fontWeight(.semibold)
+                Text("1. Open iOS Settings\n2. Go to Accessibility > Spoken Content (or 'Speak Selection')\n3. Tap 'Voices'\n4. Select a language (e.g., English, Spanish)\n5. Download voices marked with ⬇️ icon\n6. Return here to select them")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Divider()
+                    .padding(.vertical, 8)
+                
+                Text("Alternative: Settings > Siri & Search > Siri Voice")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .italic()
+            }) {
+                EmptyView()
+            }
+        }
+        .navigationTitle("Voices")
+        .onAppear {
+            loadVoices()
+        }
+    }
+    
+    private func languageName(for code: String) -> String {
+        Locale.current.localizedString(forLanguageCode: code)?.capitalized ?? code.uppercased()
+    }
+    
+    private func loadVoices() {
+        let allVoices = AVSpeechSynthesisVoice.speechVoices()
+        var groupedVoices: [String: [AVSpeechSynthesisVoice]] = [:]
+        
+        for code in supportedLanguageCodes {
+            // Get all voices for this language
+            let matches = allVoices.filter { $0.language.lowercased().starts(with: code.lowercased()) }
+            
+            // Sort by quality (Premium > Enhanced > Default) and then by name
+            let sorted = matches.sorted { voice1, voice2 in
+                if voice1.quality != voice2.quality {
+                    return voice1.quality.rawValue > voice2.quality.rawValue
+                }
+                return voice1.name < voice2.name
+            }
+            
+            groupedVoices[code] = sorted
+        }
+        
+        voices = groupedVoices
+    }
+    
+    private func playSample(voice: AVSpeechSynthesisVoice, langCode: String) {
+        let text = sampleTexts[langCode] ?? "Hello, this is a test."
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = voice
+        utterance.rate = 0.5
+        
+        // Setup audio session for playback
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        
+        synthesizer.speak(utterance)
+        
+        // Reset playing state after a delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(text.count) * 0.1) {
+            playingVoiceId = nil
+        }
+    }
+}
+
+// Voice selection row component
+struct VoiceRow: View {
+    let voice: AVSpeechSynthesisVoice
+    let langCode: String
+    let isSelected: Bool
+    let isPlaying: Bool
+    let onSelect: () -> Void
+    let onPreview: () -> Void
+    
+    var qualityBadge: (String, Color) {
+        switch voice.quality {
+        case .premium:
+            return ("Premium", .purple)
+        case .enhanced:
+            return ("Enhanced", .blue)
+        default:
+            return ("Default", .gray)
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Preview button
+            Button(action: onPreview) {
+                Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(isPlaying ? .red : .blue)
+            }
+            .buttonStyle(.plain)
+            
+            // Voice info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(voice.name)
+                    .font(.body)
+                    .foregroundColor(.primary)
+                
+                HStack(spacing: 8) {
+                    // Quality badge
+                    Text(qualityBadge.0)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(qualityBadge.1.opacity(0.15))
+                        .foregroundColor(qualityBadge.1)
+                        .cornerRadius(4)
+                    
+                    // Language variant
+                    Text(voice.language)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            // Selection indicator
+            Button(action: onSelect) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .green : .gray)
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelect()
         }
     }
 }
