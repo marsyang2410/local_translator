@@ -18,16 +18,16 @@ actor WhisperContext {
         whisper_free(context)
     }
 
-    func fullTranscribe(samples: [Float], languageCode: String? = nil) {
+    func fullTranscribe(samples: [Float], languageCode: String? = nil, prompt: String? = nil) {
         // Leave 2 processors free (i.e. the high-efficiency cores).
         let maxThreads = max(1, min(8, cpuCount() - 2))
         print("Selecting \(maxThreads) threads")
         var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
         
         // Adapted from whisper.objc
-        params.print_realtime   = true
+        params.print_realtime   = false  // Disable for speed
         params.print_progress   = false
-        params.print_timestamps = true
+        params.print_timestamps = false  // Disable timestamps for speed
         params.print_special    = false
         
         // TRANSCRIPTION MODE: Keep original language
@@ -42,13 +42,12 @@ actor WhisperContext {
             // We need to be careful with Swift String to C String bridging lifetime.
         }
         
-        // Safe way to handle C-String lifetime for params.language
-        // We will wrap the whisper_full call inside the withCString block if a language is provided
+        // Safe way to handle C-String lifetime for params.language and prompt
         
         params.n_threads        = Int32(maxThreads)
         params.offset_ms        = 0
         params.no_context       = true
-        params.single_segment   = false
+        params.single_segment   = true   // Fast mode for short utterances
 
         whisper_reset_timings(context)
         print("About to run whisper_full")
@@ -57,19 +56,43 @@ actor WhisperContext {
             if let languageCode {
                 languageCode.withCString { langStr in
                     params.language = langStr
-                    if (whisper_full(context, params, samples.baseAddress, Int32(samples.count)) != 0) {
-                        print("Failed to run the model")
+                    
+                    if let prompt {
+                        prompt.withCString { promptStr in
+                            params.initial_prompt = promptStr
+                            if (whisper_full(context, params, samples.baseAddress, Int32(samples.count)) != 0) {
+                                print("Failed to run the model")
+                            } else {
+                                whisper_print_timings(context)
+                            }
+                        }
                     } else {
-                        whisper_print_timings(context)
+                        if (whisper_full(context, params, samples.baseAddress, Int32(samples.count)) != 0) {
+                            print("Failed to run the model")
+                        } else {
+                            whisper_print_timings(context)
+                        }
                     }
                 }
             } else {
                 params.language = nil
-                if (whisper_full(context, params, samples.baseAddress, Int32(samples.count)) != 0) {
-                   print("Failed to run the model")
-               } else {
-                   whisper_print_timings(context)
-               }
+                
+                if let prompt {
+                    prompt.withCString { promptStr in
+                        params.initial_prompt = promptStr
+                        if (whisper_full(context, params, samples.baseAddress, Int32(samples.count)) != 0) {
+                            print("Failed to run the model")
+                        } else {
+                            whisper_print_timings(context)
+                        }
+                    }
+                } else {
+                    if (whisper_full(context, params, samples.baseAddress, Int32(samples.count)) != 0) {
+                       print("Failed to run the model")
+                   } else {
+                       whisper_print_timings(context)
+                   }
+                }
             }
         }
     }
@@ -91,7 +114,7 @@ actor WhisperContext {
     }
 
     private func systemInfo() -> String {
-        var info = ""
+        let info = ""
         //if (ggml_cpu_has_neon() != 0) { info += "NEON " }
         return String(info.dropLast())
     }

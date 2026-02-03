@@ -100,7 +100,9 @@ extension TranslationManager {
         case "en": return "en-US"
         case "fr": return "fr-FR"
         case "de": return "de-DE"
-        case "zh": return "zh-CN"
+        case "zh-CN": return "zh-CN"
+        case "zh-TW": return "zh-TW"
+        case "zh": return "zh-CN"  // Fallback to Simplified
         case "ja": return "ja-JP"
         case "it": return "it-IT"
         case "pt": return "pt-BR"

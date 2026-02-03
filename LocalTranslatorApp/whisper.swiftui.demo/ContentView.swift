@@ -17,6 +17,10 @@ struct ContentView: View {
     @State private var showEditSheet = false
     @State private var editingText = ""
     
+    // Custom picker sheets
+    @State private var showTopLanguagePicker = false
+    @State private var showBottomLanguagePicker = false
+    
     // Interaction state
     @State private var isRecordingTop = false
     @State private var isRecordingBottom = false
@@ -37,7 +41,8 @@ struct ContentView: View {
         ("Spanish", "es"),
         ("French", "fr"),
         ("German", "de"),
-        ("Chinese", "zh"),
+        ("Chinese (Simplified)", "zh-CN"),
+        ("Chinese (Traditional)", "zh-TW"),
         ("Japanese", "ja"),
         ("Portuguese", "pt"),
         ("Italian", "it")
@@ -50,43 +55,128 @@ struct ContentView: View {
                 ZStack {
                     topColor.opacity(0.1).edgesIgnoringSafeArea(.top)
                     
-                    VStack(spacing: 20) {
-                        // Language Picker (Rotated for Face-to-Face)
-                        Picker("Language", selection: $topLanguage) {
-                            ForEach(languages, id: \.1) { name, code in
-                                Text(name).tag(code)
+                    VStack(spacing: 15) {
+                        // Language Picker beside Record Button (when not recording)
+                        if !isRecordingTop {
+                            HStack(spacing: 15) {
+                                // Swap order for duo mode - button on right side for facing person
+                                if isSoloMode {
+                                    // Solo mode: Picker left, Button right
+                                    Button(action: { showTopLanguagePicker = true }) {
+                                        HStack {
+                                            Text(languageName(for: topLanguage))
+                                                .foregroundColor(.primary)
+                                            Image(systemName: "chevron.down")
+                                                .foregroundColor(.secondary)
+                                                .font(.caption)
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(Color(UIColor.secondarySystemBackground))
+                                        .cornerRadius(8)
+                                    }
+                                    
+                                    PersonControls(
+                                        isRecording: isRecordingTop,
+                                        isPaused: whisperState.isPaused,
+                                        color: topColor,
+                                        languageName: languageName(for: topLanguage),
+                                        onStart: {
+                                            isRecordingTop = true
+                                            isTopSpeech = true
+                                            Task { await whisperState.startRecording(source: topLanguage, target: bottomLanguage) }
+                                        },
+                                        onStop: {
+                                            isRecordingTop = false
+                                            Task { await whisperState.stopRecording() }
+                                        },
+                                        onPause: {
+                                            Task { await whisperState.pauseRecording() }
+                                        },
+                                        onResume: {
+                                            Task { await whisperState.resumeRecording() }
+                                        },
+                                        onCancel: {
+                                            isRecordingTop = false
+                                            Task { await whisperState.cancelRecording() }
+                                        }
+                                    )
+                                } else {
+                                    // Duo mode: Button left, Picker right (so after 180° rotation, button appears on right for facing person)
+                                    PersonControls(
+                                        isRecording: isRecordingTop,
+                                        isPaused: whisperState.isPaused,
+                                        color: topColor,
+                                        languageName: languageName(for: topLanguage),
+                                        onStart: {
+                                            isRecordingTop = true
+                                            isTopSpeech = true
+                                            Task { await whisperState.startRecording(source: topLanguage, target: bottomLanguage) }
+                                        },
+                                        onStop: {
+                                            isRecordingTop = false
+                                            Task { await whisperState.stopRecording() }
+                                        },
+                                        onPause: {
+                                            Task { await whisperState.pauseRecording() }
+                                        },
+                                        onResume: {
+                                            Task { await whisperState.resumeRecording() }
+                                        },
+                                        onCancel: {
+                                            isRecordingTop = false
+                                            Task { await whisperState.cancelRecording() }
+                                        }
+                                    )
+                                    .rotationEffect(.degrees(180))
+                                    
+                                    Button(action: { showTopLanguagePicker = true }) {
+                                        HStack {
+                                            Text(languageName(for: topLanguage))
+                                                .foregroundColor(.primary)
+                                            Image(systemName: "chevron.down")
+                                                .foregroundColor(.secondary)
+                                                .font(.caption)
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(Color(UIColor.secondarySystemBackground))
+                                        .cornerRadius(8)
+                                    }
+                                    .rotationEffect(.degrees(180))
+                                }
                             }
+                        } else {
+                            // Show only controls when recording
+                            PersonControls(
+                                isRecording: isRecordingTop,
+                                isPaused: whisperState.isPaused,
+                                color: topColor,
+                                languageName: languageName(for: topLanguage),
+                                onStart: {
+                                    isRecordingTop = true
+                                    isTopSpeech = true
+                                    Task { await whisperState.startRecording(source: topLanguage, target: bottomLanguage) }
+                                },
+                                onStop: {
+                                    isRecordingTop = false
+                                    Task { await whisperState.stopRecording() }
+                                },
+                                onPause: {
+                                    Task { await whisperState.pauseRecording() }
+                                },
+                                onResume: {
+                                    Task { await whisperState.resumeRecording() }
+                                },
+                                onCancel: {
+                                    isRecordingTop = false
+                                    Task { await whisperState.cancelRecording() }
+                                }
+                            )
+                            .rotationEffect(.degrees(isSoloMode ? 0 : 180))
                         }
-                        .pickerStyle(MenuPickerStyle())
-                        .rotationEffect(.degrees(isSoloMode ? 0 : 180))
                         
-                        // Action Controls (Rotated)
-                        PersonControls(
-                            isRecording: isRecordingTop,
-                            isPaused: whisperState.isPaused,
-                            color: topColor,
-                            languageName: languageName(for: topLanguage),
-                            onStart: {
-                                isRecordingTop = true
-                                isTopSpeech = true
-                                Task { await whisperState.startRecording(source: topLanguage, target: bottomLanguage) }
-                            },
-                            onStop: {
-                                isRecordingTop = false
-                                Task { await whisperState.stopRecording() }
-                            },
-                            onPause: {
-                                Task { await whisperState.pauseRecording() }
-                            },
-                            onResume: {
-                                Task { await whisperState.resumeRecording() }
-                            },
-                            onCancel: {
-                                isRecordingTop = false
-                                Task { await whisperState.cancelRecording() }
-                            }
-                        )
-                        .rotationEffect(.degrees(isSoloMode ? 0 : 180))
+                        Spacer()
                         
                         // Result Display (Rotated)
                         // Shows what Bottom person said (translated to Top language)
@@ -98,30 +188,33 @@ struct ContentView: View {
                         
                         if !topOutput.isEmpty && !isRecordingBottom {
                              VStack(spacing: 8) {
-                                 HStack {
+                                 HStack(spacing: 4) {
                                      // 1. TTS Button (Pronunciation)
                                      Button(action: { whisperState.speak(text: topOutput, language: topLanguage) }) {
                                          Image(systemName: whisperState.isPlayingTTS ? "stop.circle.fill" : "speaker.wave.2.circle.fill")
-                                             .font(.title)
+                                             .font(.title2)
                                              .foregroundColor(topColor)
                                      }
-                                     .padding(.trailing, 8)
                                      
                                      // 2. User Recording Button (Original Voice)
                                      Button(action: { whisperState.playLastRecording() }) {
                                          Image(systemName: whisperState.isPlayingAudio ? "stop.circle.fill" : "waveform.circle.fill")
-                                             .font(.title)
+                                             .font(.title2)
                                              .foregroundColor(isTopSpeech ? topColor : .gray)
                                      }
                                      .disabled(!isTopSpeech)
                                      
-                                     Text(topOutput)
-                                        .font(.title3)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(topColor)
-                                        .padding()
-                                        .background(Color.white.opacity(0.8))
-                                        .cornerRadius(12)
+                                     ScrollView {
+                                         Text(topOutput)
+                                            .font(.body)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(topColor)
+                                            .padding(10)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                     }
+                                     .frame(maxHeight: 100)
+                                     .background(Color.white.opacity(0.8))
+                                     .cornerRadius(12)
                                  }
                                  
                                  // Edit button (only show for transcribed text, not translation)
@@ -145,6 +238,8 @@ struct ContentView: View {
                              }
                              .rotationEffect(.degrees(isSoloMode ? 0 : 180))
                         }
+                        
+                        Spacer()
                     }
                     .padding()
                 }
@@ -213,35 +308,40 @@ struct ContentView: View {
                 ZStack {
                     bottomColor.opacity(0.1).edgesIgnoringSafeArea(.bottom)
                     
-                    VStack(spacing: 20) {
+                    VStack(spacing: 15) {
+                        Spacer()
+                        
                         // Result Display
                         // Shows what was said on this side (Transcription if B spoke, Translation if A spoke)
                         let bottomOutput = isTopSpeech ? whisperState.translatedText : whisperState.transcribedText
                         
                         if !bottomOutput.isEmpty && !isRecordingTop {
                              VStack(spacing: 8) {
-                                 HStack {
-                                     Text(bottomOutput)
-                                        .font(.title3)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(bottomColor)
-                                        .padding()
-                                        .background(Color.white.opacity(0.8))
-                                        .cornerRadius(12)
+                                 HStack(spacing: 4) {
+                                     ScrollView {
+                                         Text(bottomOutput)
+                                            .font(.body)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(bottomColor)
+                                            .padding(10)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                     }
+                                     .frame(maxHeight: 100)
+                                     .background(Color.white.opacity(0.8))
+                                     .cornerRadius(12)
                                      
                                      // 1. User Recording Button (Original Voice)
                                      Button(action: { whisperState.playLastRecording() }) {
                                          Image(systemName: whisperState.isPlayingAudio ? "stop.circle.fill" : "waveform.circle.fill")
-                                             .font(.title)
+                                             .font(.title2)
                                              .foregroundColor(!isTopSpeech ? bottomColor : .gray)
                                      }
                                      .disabled(isTopSpeech)
-                                     .padding(.trailing, 8)
 
                                      // 2. TTS Button (Pronunciation)
                                      Button(action: { whisperState.speak(text: bottomOutput, language: bottomLanguage) }) {
                                          Image(systemName: whisperState.isPlayingTTS ? "stop.circle.fill" : "speaker.wave.2.circle.fill")
-                                             .font(.title)
+                                             .font(.title2)
                                              .foregroundColor(bottomColor)
                                      }
                                  }
@@ -269,40 +369,77 @@ struct ContentView: View {
                         
                         Spacer()
                         
-                        // Action Controls
-                        PersonControls(
-                            isRecording: isRecordingBottom,
-                            isPaused: whisperState.isPaused,
-                            color: bottomColor,
-                            languageName: languageName(for: bottomLanguage),
-                            onStart: {
-                                isRecordingBottom = true
-                                isTopSpeech = false
-                                Task { await whisperState.startRecording(source: bottomLanguage, target: topLanguage) }
-                            },
-                            onStop: {
-                                isRecordingBottom = false
-                                Task { await whisperState.stopRecording() }
-                            },
-                            onPause: {
-                                Task { await whisperState.pauseRecording() }
-                            },
-                            onResume: {
-                                Task { await whisperState.resumeRecording() }
-                            },
-                            onCancel: {
-                                isRecordingBottom = false
-                                Task { await whisperState.cancelRecording() }
+                        // Language Picker beside Record Button (when not recording)
+                        if !isRecordingBottom {
+                            HStack(spacing: 15) {
+                                PersonControls(
+                                    isRecording: isRecordingBottom,
+                                    isPaused: whisperState.isPaused,
+                                    color: bottomColor,
+                                    languageName: languageName(for: bottomLanguage),
+                                    onStart: {
+                                        isRecordingBottom = true
+                                        isTopSpeech = false
+                                        Task { await whisperState.startRecording(source: bottomLanguage, target: topLanguage) }
+                                    },
+                                    onStop: {
+                                        isRecordingBottom = false
+                                        Task { await whisperState.stopRecording() }
+                                    },
+                                    onPause: {
+                                        Task { await whisperState.pauseRecording() }
+                                    },
+                                    onResume: {
+                                        Task { await whisperState.resumeRecording() }
+                                    },
+                                    onCancel: {
+                                        isRecordingBottom = false
+                                        Task { await whisperState.cancelRecording() }
+                                    }
+                                )
+                                
+                                Button(action: { showBottomLanguagePicker = true }) {
+                                    HStack {
+                                        Text(languageName(for: bottomLanguage))
+                                            .foregroundColor(.primary)
+                                        Image(systemName: "chevron.down")
+                                            .foregroundColor(.secondary)
+                                            .font(.caption)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(Color(UIColor.secondarySystemBackground))
+                                    .cornerRadius(8)
+                                }
                             }
-                        )
-                        
-                        // Language Picker
-                        Picker("Language", selection: $bottomLanguage) {
-                            ForEach(languages, id: \.1) { name, code in
-                                Text(name).tag(code)
-                            }
+                        } else {
+                            // Show only controls when recording
+                            PersonControls(
+                                isRecording: isRecordingBottom,
+                                isPaused: whisperState.isPaused,
+                                color: bottomColor,
+                                languageName: languageName(for: bottomLanguage),
+                                onStart: {
+                                    isRecordingBottom = true
+                                    isTopSpeech = false
+                                    Task { await whisperState.startRecording(source: bottomLanguage, target: topLanguage) }
+                                },
+                                onStop: {
+                                    isRecordingBottom = false
+                                    Task { await whisperState.stopRecording() }
+                                },
+                                onPause: {
+                                    Task { await whisperState.pauseRecording() }
+                                },
+                                onResume: {
+                                    Task { await whisperState.resumeRecording() }
+                                },
+                                onCancel: {
+                                    isRecordingBottom = false
+                                    Task { await whisperState.cancelRecording() }
+                                }
+                            )
                         }
-                        .pickerStyle(MenuPickerStyle())
                     }
                     .padding()
                 }
@@ -322,9 +459,27 @@ struct ContentView: View {
                     }
                 )
             }
+            .sheet(isPresented: $showTopLanguagePicker) {
+                CustomLanguagePicker(
+                    selectedLanguage: $topLanguage,
+                    languages: languages,
+                    title: "Select Language",
+                    color: topColor,
+                    isRotated: !isSoloMode
+                )
+            }
+            .sheet(isPresented: $showBottomLanguagePicker) {
+                CustomLanguagePicker(
+                    selectedLanguage: $bottomLanguage,
+                    languages: languages,
+                    title: "Select Language",
+                    color: bottomColor,
+                    isRotated: false
+                )
+            }
             // MARK: - Translation Logic
             // When transcription completes, translate using stored session OR trigger a new one
-            .onChange(of: whisperState.transcribedText) { newText in
+            .onChange(of: whisperState.transcribedText) { _, newText in
                 guard !newText.isEmpty else { return }
                 
                 let source = isTopSpeech ? topLanguage : bottomLanguage
@@ -393,13 +548,13 @@ struct PersonControls: View {
     var onCancel: () -> Void
     
     var body: some View {
-        VStack(spacing: 15) {
+        VStack(spacing: 10) {
             if isRecording {
-                HStack(spacing: 30) {
+                HStack(spacing: 25) {
                     // Cancel Button
                     Button(action: onCancel) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 40))
+                            .font(.system(size: 35))
                             .foregroundColor(.red)
                     }
                     
@@ -408,9 +563,9 @@ struct PersonControls: View {
                         ZStack {
                             Circle()
                                 .fill(color)
-                                .frame(width: 80, height: 80)
+                                .frame(width: 70, height: 70)
                             Image(systemName: "stop.fill")
-                                .font(.system(size: 30))
+                                .font(.system(size: 25))
                                 .foregroundColor(.white)
                         }
                     }
@@ -419,7 +574,7 @@ struct PersonControls: View {
                     // Pause/Resume Button
                     Button(action: isPaused ? onResume : onPause) {
                         Image(systemName: isPaused ? "play.circle.fill" : "pause.circle.fill")
-                            .font(.system(size: 40))
+                            .font(.system(size: 35))
                             .foregroundColor(color)
                     }
                 }
@@ -430,24 +585,27 @@ struct PersonControls: View {
                     .foregroundColor(color)
                     .italic()
             } else {
-                // Initial Record Button
-                Button(action: onStart) {
-                    VStack {
+                // Initial Record Button - Smaller and pushed down
+                VStack {
+                    Spacer()
+                        .frame(height: 20)
+                    
+                    Button(action: onStart) {
                         ZStack {
                             Circle()
                                 .fill(color)
-                                .frame(width: 80, height: 80)
+                                .frame(width: 60, height: 60)
                             Image(systemName: "mic.fill")
-                                .font(.system(size: 40))
+                                .font(.system(size: 30))
                                 .foregroundColor(.white)
                         }
-                        .shadow(radius: 5)
-                        
-                        Text("Tap to Speak \(languageName)")
-                            .font(.headline)
-                            .foregroundColor(color)
-                            .padding(.top, 5)
                     }
+                    .shadow(radius: 5)
+                    
+                    Text("Tap to Speak")
+                        .font(.caption)
+                        .foregroundColor(color)
+                        .padding(.top, 4)
                 }
                 .transition(.scale.combined(with: .opacity))
             }
@@ -456,6 +614,7 @@ struct PersonControls: View {
         .animation(.spring(), value: isPaused)
     }
 }
+
 
 struct SettingsView: View {
     @ObservedObject var whisperState: WhisperState
@@ -1111,5 +1270,53 @@ struct DownloadButton: View {
 extension View {
     func onLoad(perform action: @escaping (WhisperModelDescriptor) -> Void) -> some View {
         return self
+    }
+}
+
+// MARK: - Custom Language Picker
+
+struct CustomLanguagePicker: View {
+    @Binding var selectedLanguage: String
+    @Environment(\.dismiss) var dismiss
+    let languages: [(String, String)]
+    let title: String
+    let color: Color
+    let isRotated: Bool
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(languages, id: \.1) { name, code in
+                    Button(action: {
+                        selectedLanguage = code
+                        dismiss()
+                    }) {
+                        HStack {
+                            Text(name)
+                                .foregroundColor(.primary)
+                                .font(.body)
+                            Spacer()
+                            if selectedLanguage == code {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(color)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .rotationEffect(.degrees(isRotated ? 180 : 0))
     }
 }

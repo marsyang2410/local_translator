@@ -44,6 +44,12 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         Bundle.main.url(forResource: "jfk", withExtension: "wav", subdirectory: "samples")
     }
     
+    // Prompt hints to guide Whisper for Chinese variants
+    private let languagePrompts: [String: String] = [
+        "zh-CN": "这是简体中文。",  // "This is Simplified Chinese."
+        "zh-TW": "這是繁體中文。"   // "This is Traditional Chinese."
+    ]
+    
     private enum LoadError: Error {
         case couldNotLocateModel
     }
@@ -144,8 +150,14 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
             let data = try readAudioSamples(url)
             messageLog += "Transcribing data...\n"
             
-            // Pass the source language hint to Whisper
-            await whisperContext.fullTranscribe(samples: data, languageCode: currentSourceLanguage)
+            // Get base language code for Whisper (zh for both Chinese variants)
+            let whisperLangCode = currentSourceLanguage.hasPrefix("zh") ? "zh" : currentSourceLanguage
+            
+            // Get prompt hint for Chinese variants
+            let prompt = languagePrompts[currentSourceLanguage]
+            
+            // Pass the source language hint and prompt to Whisper
+            await whisperContext.fullTranscribe(samples: data, languageCode: whisperLangCode, prompt: prompt)
             
             let text = await whisperContext.getTranscription()
             
@@ -203,7 +215,8 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
             }
         }
         
-        utterance.rate = 0.5
+        utterance.rate = 0.52  // Slightly faster for quicker response
+        utterance.preUtteranceDelay = 0.0  // No delay before speaking
         synthesizer.speak(utterance)
     }
     
@@ -227,11 +240,15 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         let target = currentTargetLanguage
         
         do {
+            // Translate and speak immediately
             let response = try await session.translate(transcribedText)
             translatedText = response.targetText
             print("✅ Translated: \(response.targetText)")
             
-            speak(text: response.targetText, language: target)
+            // Speak immediately without waiting
+            Task { @MainActor in
+                speak(text: response.targetText, language: target)
+            }
         } catch {
             print("❌ Translation error: \(error)")
         }
@@ -292,6 +309,9 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         await recorder.stopRecording()
         isRecording = false
         isPaused = false
+        
+        // Prepare audio session for TTS early to avoid delay
+        setupAudioSession(isRecording: false)
         
         if let recordedFile {
             await transcribeAudio(recordedFile)
