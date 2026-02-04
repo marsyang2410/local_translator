@@ -46,8 +46,8 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
     
     // Prompt hints to guide Whisper for Chinese variants
     private let languagePrompts: [String: String] = [
-        "zh-CN": "这是简体中文。",  // "This is Simplified Chinese."
-        "zh-TW": "這是繁體中文。"   // "This is Traditional Chinese."
+        "zh-CN": "简体",  // "Simplified" - shorter = faster
+        "zh-TW": "繁體"   // "Traditional" - shorter = faster
     ]
     
     private enum LoadError: Error {

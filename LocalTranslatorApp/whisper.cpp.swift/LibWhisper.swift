@@ -48,6 +48,11 @@ actor WhisperContext {
         params.offset_ms        = 0
         params.no_context       = true
         params.single_segment   = true   // Fast mode for short utterances
+        
+        // Speed optimizations
+        params.temperature      = 0.0    // Deterministic output, faster
+        params.max_len          = 0      // No max length limit
+        params.suppress_blank   = true   // Skip blank outputs
 
         whisper_reset_timings(context)
         print("About to run whisper_full")
