@@ -495,8 +495,9 @@ struct ContentView: View {
                     return
                 }
                 
-                // If config is already set to this target, we reuse the session manually
-                if let currentConfig = translationConfig, 
+                // If config is already set to this source+target, we reuse the session manually
+                if let currentConfig = translationConfig,
+                   currentConfig.source == Locale.Language(identifier: source),
                    currentConfig.target == Locale.Language(identifier: target) {
                     Task {
                         await whisperState.translateCurrentText()
@@ -504,7 +505,7 @@ struct ContentView: View {
                 } else {
                     // Change config to trigger a new session via .translationTask
                     translationConfig = TranslationSession.Configuration(
-                        source: nil,
+                        source: Locale.Language(identifier: source),
                         target: Locale.Language(identifier: target)
                     )
                 }

@@ -194,7 +194,9 @@ actor WhisperContext {
         params.use_gpu = false
         print("Running on the simulator, using CPU")
 #else
-        params.flash_attn = true // Enabled by default for Metal
+        params.use_gpu = true     // Enable GPU/Metal
+        params.flash_attn = true  // Enable Flash Attention
+        print("Using Core ML (if available) + Metal GPU acceleration")
 #endif
         let context = whisper_init_from_file_with_params(path, params)
         if let context {

@@ -44,10 +44,11 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         Bundle.main.url(forResource: "jfk", withExtension: "wav", subdirectory: "samples")
     }
     
-    // Prompt hints to guide Whisper for Chinese variants
+    // Prompt hints to guide Whisper for better accuracy
+    // Short prompts to minimize processing overhead
     private let languagePrompts: [String: String] = [
-        "zh-CN": "简体",  // "Simplified" - shorter = faster
-        "zh-TW": "繁體"   // "Traditional" - shorter = faster
+        "zh-CN": "以下是普通话的句子。",  // "The following is a Mandarin sentence." - More context
+        "zh-TW": "以下是國語的句子。"   // "The following is a Mandarin sentence." (Traditional)
     ]
     
     private enum LoadError: Error {
