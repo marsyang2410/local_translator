@@ -38,6 +38,10 @@ struct ContentView: View {
     @State private var isRecordingTop = false
     @State private var isRecordingBottom = false
     
+    // Copy feedback states
+    @State private var topCopied = false
+    @State private var bottomCopied = false
+    
     // UI Colors (Dynamic)
     @State private var topColor: Color = .orange
     @State private var bottomColor: Color = .blue
@@ -236,14 +240,56 @@ struct ContentView: View {
                                             .padding(16)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                      }
-                                     .frame(maxHeight: 100)
+                                     .frame(maxHeight: 180)
                                      .background(.ultraThinMaterial)
                                      .clipShape(RoundedRectangle(cornerRadius: 16))
                                      .overlay(
                                          RoundedRectangle(cornerRadius: 16)
                                              .stroke(Color.white.opacity(0.3), lineWidth: 1)
                                      )
+                                     .overlay(
+                                         // "Copied!" toast
+                                         Group {
+                                             if topCopied {
+                                                 VStack {
+                                                     HStack(spacing: 6) {
+                                                         Image(systemName: "checkmark.circle.fill")
+                                                             .foregroundColor(.white)
+                                                         Text("Copied!")
+                                                             .fontWeight(.semibold)
+                                                             .foregroundColor(.white)
+                                                     }
+                                                     .font(.caption)
+                                                     .padding(.horizontal, 16)
+                                                     .padding(.vertical, 8)
+                                                     .background(
+                                                         Capsule()
+                                                             .fill(topColor)
+                                                             .shadow(color: topColor.opacity(0.5), radius: 8, x: 0, y: 4)
+                                                     )
+                                                 }
+                                                 .transition(.scale.combined(with: .opacity))
+                                             }
+                                         }
+                                     )
                                      .shadow(color: topColor.opacity(0.15), radius: 10, x: 0, y: 5)
+                                     .scaleEffect(topCopied ? 0.98 : 1.0)
+                                     .onTapGesture {
+                                         UIPasteboard.general.string = topOutput
+                                         let impact = UIImpactFeedbackGenerator(style: .medium)
+                                         impact.impactOccurred()
+                                         
+                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                             topCopied = true
+                                         }
+                                         
+                                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                             withAnimation {
+                                                 topCopied = false
+                                             }
+                                         }
+                                     }
+                                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: topCopied)
                                  }
                                  
                                  // Edit button (only show for transcribed text, not translation)
@@ -410,14 +456,56 @@ struct ContentView: View {
                                             .padding(16)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                      }
-                                     .frame(maxHeight: 100)
+                                     .frame(maxHeight: 150)
                                      .background(.ultraThinMaterial)
                                      .clipShape(RoundedRectangle(cornerRadius: 16))
                                      .overlay(
                                          RoundedRectangle(cornerRadius: 16)
                                              .stroke(Color.white.opacity(0.3), lineWidth: 1)
                                      )
+                                     .overlay(
+                                         // "Copied!" toast
+                                         Group {
+                                             if bottomCopied {
+                                                 VStack {
+                                                     HStack(spacing: 6) {
+                                                         Image(systemName: "checkmark.circle.fill")
+                                                             .foregroundColor(.white)
+                                                         Text("Copied!")
+                                                             .fontWeight(.semibold)
+                                                             .foregroundColor(.white)
+                                                     }
+                                                     .font(.caption)
+                                                     .padding(.horizontal, 16)
+                                                     .padding(.vertical, 8)
+                                                     .background(
+                                                         Capsule()
+                                                             .fill(bottomColor)
+                                                             .shadow(color: bottomColor.opacity(0.5), radius: 8, x: 0, y: 4)
+                                                     )
+                                                 }
+                                                 .transition(.scale.combined(with: .opacity))
+                                             }
+                                         }
+                                     )
                                      .shadow(color: bottomColor.opacity(0.15), radius: 10, x: 0, y: 5)
+                                     .scaleEffect(bottomCopied ? 0.98 : 1.0)
+                                     .onTapGesture {
+                                         UIPasteboard.general.string = bottomOutput
+                                         let impact = UIImpactFeedbackGenerator(style: .medium)
+                                         impact.impactOccurred()
+                                         
+                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                             bottomCopied = true
+                                         }
+                                         
+                                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                             withAnimation {
+                                                 bottomCopied = false
+                                             }
+                                         }
+                                     }
+                                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: bottomCopied)
                                      
                                      // 1. User Recording Button (Original Voice)
                                      Button(action: { whisperState.playLastRecording() }) {
