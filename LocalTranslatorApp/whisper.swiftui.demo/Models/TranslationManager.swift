@@ -104,6 +104,7 @@ extension TranslationManager {
         case "zh-TW": return "zh-TW"
         case "zh": return "zh-CN"  // Fallback to Simplified
         case "ja": return "ja-JP"
+        case "ko": return "ko-KR"
         case "it": return "it-IT"
         case "pt": return "pt-BR"
         default: return "en-US"

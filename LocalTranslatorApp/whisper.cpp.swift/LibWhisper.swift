@@ -107,7 +107,7 @@ actor WhisperContext {
         for i in 0..<whisper_full_n_segments(context) {
             transcription += String.init(cString: whisper_full_get_segment_text(context, i))
         }
-        return transcription
+        return transcription.trimmingCharacters(in: .whitespaces)
     }
 
     static func benchMemcpy(nThreads: Int32) async -> String {

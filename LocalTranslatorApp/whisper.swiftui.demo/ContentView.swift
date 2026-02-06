@@ -61,6 +61,7 @@ struct ContentView: View {
         ("Chinese (Simplified)", "zh-CN"),
         ("Chinese (Traditional)", "zh-TW"),
         ("Japanese", "ja"),
+        ("Korean", "ko"),
         ("Portuguese", "pt"),
         ("Italian", "it")
     ]
@@ -358,28 +359,10 @@ struct ContentView: View {
                         
                         Spacer()
                         
-                        // Theme Toggle Button
-                        Button(action: {
-                            // Cycle through: system → light → dark → system
-                            switch themePreference {
-                            case "system":
-                                themePreference = "light"
-                            case "light":
-                                themePreference = "dark"
-                            case "dark":
-                                themePreference = "system"
-                            default:
-                                themePreference = "system"
-                            }
-                        }) {
-                            Image(systemName: themeIconName)
-                                .font(.title3)
-                                .foregroundColor(.primary)
-                        }
-                        .padding(.trailing, 12)
-                        
                         Button(action: { showModels = true }) {
                             Image(systemName: "gear")
+                                .font(.title2)
+                                .foregroundColor(.primary)
                         }
                     }
                     
@@ -897,7 +880,12 @@ struct PersonControls: View {
                     Spacer()
                         .frame(height: 20)
                     
-                    Button(action: onStart) {
+                    Button(action: {
+                        // Add small delay to prevent gesture timeout
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            onStart()
+                        }
+                    }) {
                         ZStack {
                             Circle()
                                 .fill(color)
@@ -932,26 +920,17 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section(header: Text("Appearance")) {
-                    Picker("Theme", selection: $themePreference) {
-                        HStack {
-                            Image(systemName: "circle.lefthalf.filled")
-                            Text("System")
+                    HStack {
+                        Label("Theme", systemImage: "paintbrush")
+                        Spacer()
+                        Picker("", selection: $themePreference) {
+                            Text("System").tag("system")
+                            Text("Light").tag("light")
+                            Text("Dark").tag("dark")
                         }
-                        .tag("system")
-                        
-                        HStack {
-                            Image(systemName: "sun.max.fill")
-                            Text("Light")
-                        }
-                        .tag("light")
-                        
-                        HStack {
-                            Image(systemName: "moon.fill")
-                            Text("Dark")
-                        }
-                        .tag("dark")
+                        .pickerStyle(.segmented)
+                        .fixedSize()
                     }
-                    .pickerStyle(.inline)
                 }
                 
                 Section(header: Text("Model Management")) {
@@ -1003,12 +982,13 @@ struct VoiceSettingsView: View {
         "de": "Hallo, wie geht es dir?",
         "zh": "你好，你今天好吗？",
         "ja": "こんにちは、お元気ですか？",
+        "ko": "안녕하세요, 오늘 어떻게 지내세요?",
         "it": "Ciao, come stai oggi?",
         "pt": "Olá, como você está hoje?"
     ]
     
     // We'll filter for the languages we support in the app
-    private let supportedLanguageCodes = ["en", "es", "fr", "de", "zh", "ja", "it", "pt"]
+    private let supportedLanguageCodes = ["en", "es", "fr", "de", "zh", "ja", "ko", "it", "pt"]
     
     var body: some View {
         List {

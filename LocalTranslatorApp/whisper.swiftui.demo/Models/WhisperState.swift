@@ -336,6 +336,13 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
             self.translatedText = ""
         }
         
+        // Check permission first (non-blocking on subsequent calls)
+        let hasPermission = await requestRecordPermissionAsync()
+        guard hasPermission else {
+            print("Microphone permission denied")
+            return
+        }
+        
         // Ensure microphone + loudspeaker
         await setupAudioSessionAsync(isRecording: true)
         
@@ -343,22 +350,20 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         self.currentSourceLanguage = source
         self.currentTargetLanguage = target
         
-        requestRecordPermission { granted in
-            if granted {
-                Task {
-                    do {
-                        await self.stopPlayback()
-                        let file = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                            .appending(path: "output.wav")
-                        try await self.recorder.startRecording(toOutputFile: file, delegate: self)
-                        self.isRecording = true
-                        self.recordedFile = file
-                    } catch {
-                        print(error.localizedDescription)
-                        self.messageLog += "\(error.localizedDescription)\n"
-                        self.isRecording = false
-                    }
-                }
+        do {
+            await stopPlayback()
+            let file = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                .appending(path: "output.wav")
+            try await self.recorder.startRecording(toOutputFile: file, delegate: self)
+            await MainActor.run {
+                self.isRecording = true
+                self.recordedFile = file
+            }
+        } catch {
+            print(error.localizedDescription)
+            await MainActor.run {
+                self.messageLog += "\(error.localizedDescription)\n"
+                self.isRecording = false
             }
         }
     }
@@ -431,6 +436,19 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
 #else
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
             response(granted)
+        }
+#endif
+    }
+    
+    // Async version for modern Swift concurrency
+    nonisolated private func requestRecordPermissionAsync() async -> Bool {
+#if os(macOS)
+        return true
+#else
+        return await withCheckedContinuation { continuation in
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                continuation.resume(returning: granted)
+            }
         }
 #endif
     }
