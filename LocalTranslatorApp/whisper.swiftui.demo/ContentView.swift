@@ -6,9 +6,22 @@ struct ContentView: View {
     @StateObject var whisperState = WhisperState()
     @State private var showModels = false
     
-    // Language selections
-    @State private var topLanguage = "es" // Person A (e.g. Spanish)
-    @State private var bottomLanguage = "en" // Person B (e.g. English)
+    // Theme preference: "light", "dark", or "system"
+    @AppStorage("themePreference") private var themePreference: String = "system"
+    @Environment(\.colorScheme) var systemColorScheme
+    
+    // Computed property for current color scheme
+    private var currentColorScheme: ColorScheme? {
+        switch themePreference {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil // Use system
+        }
+    }
+    
+    // Language selections - Persisted across app restarts
+    @AppStorage("topLanguage") private var topLanguage = "es" // Person A (e.g. Spanish)
+    @AppStorage("bottomLanguage") private var bottomLanguage = "en" // Person B (e.g. English)
     
     // Mode selection
     @State private var isSoloMode = false // true = Solo mode (normal orientation), false = Duo mode (face-to-face)
@@ -49,11 +62,17 @@ struct ContentView: View {
     ]
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // MARK: - Top Section (Person A)
-                ZStack {
-                    topColor.opacity(0.1).edgesIgnoringSafeArea(.top)
+        ZStack {
+            NavigationView {
+                VStack(spacing: 0) {
+                    // MARK: - Top Section (Person A)
+                    ZStack {
+                        LinearGradient(
+                            gradient: Gradient(colors: [topColor.opacity(0.05), topColor.opacity(0.15)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .edgesIgnoringSafeArea(.top)
                     
                     VStack(spacing: 15) {
                         // Language Picker beside Record Button (when not recording)
@@ -140,8 +159,13 @@ struct ContentView: View {
                                         }
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 8)
-                                        .background(Color(UIColor.secondarySystemBackground))
-                                        .cornerRadius(8)
+                                        .background(.thinMaterial)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.white.opacity(0.4), lineWidth: 1)
+                                        )
+                                        .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 3)
                                     }
                                     .rotationEffect(.degrees(180))
                                 }
@@ -209,12 +233,17 @@ struct ContentView: View {
                                             .font(.body)
                                             .fontWeight(.semibold)
                                             .foregroundColor(topColor)
-                                            .padding(10)
+                                            .padding(16)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                      }
                                      .frame(maxHeight: 100)
-                                     .background(Color.white.opacity(0.8))
-                                     .cornerRadius(12)
+                                     .background(.ultraThinMaterial)
+                                     .clipShape(RoundedRectangle(cornerRadius: 16))
+                                     .overlay(
+                                         RoundedRectangle(cornerRadius: 16)
+                                             .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                     )
+                                     .shadow(color: topColor.opacity(0.15), radius: 10, x: 0, y: 5)
                                  }
                                  
                                  // Edit button (only show for transcribed text, not translation)
@@ -230,9 +259,14 @@ struct ContentView: View {
                                          .font(.caption)
                                          .foregroundColor(topColor)
                                          .padding(.horizontal, 12)
-                                         .padding(.vertical, 4)
-                                         .background(Color.white.opacity(0.6))
-                                         .cornerRadius(12)
+                                         .padding(.vertical, 6)
+                                         .background(.thinMaterial)
+                                         .clipShape(Capsule())
+                                         .overlay(
+                                             Capsule()
+                                                 .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                                         )
+                                         .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
                                      }
                                  }
                              }
@@ -246,37 +280,64 @@ struct ContentView: View {
                 .frame(maxHeight: .infinity)
                 
                 // MARK: - Center Controls
-                HStack {
-                    if !whisperState.canTranscribe {
-                        Text("Loading Model...")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    } else {
+                ZStack {
+                    // Background layer with left/right buttons
+                    HStack {
+                        if !whisperState.canTranscribe {
+                            Text("Loading Model...")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        } else {
+                            Button(action: {
+                                // Swap Languages
+                                let tempLang = topLanguage
+                                topLanguage = bottomLanguage
+                                bottomLanguage = tempLang
+                                
+                                // Swap Colors
+                                let tempColor = topColor
+                                topColor = bottomColor
+                                bottomColor = tempColor
+                                
+                                // Swap Message Content
+                                let tempText = whisperState.transcribedText
+                                whisperState.transcribedText = whisperState.translatedText
+                                whisperState.translatedText = tempText
+                            }) {
+                                Image(systemName: "arrow.up.arrow.down.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        // Theme Toggle Button
                         Button(action: {
-                            // Swap Languages
-                            let tempLang = topLanguage
-                            topLanguage = bottomLanguage
-                            bottomLanguage = tempLang
-                            
-                            // Swap Colors
-                            let tempColor = topColor
-                            topColor = bottomColor
-                            bottomColor = tempColor
-                            
-                            // Swap Message Content
-                            let tempText = whisperState.transcribedText
-                            whisperState.transcribedText = whisperState.translatedText
-                            whisperState.translatedText = tempText
+                            // Cycle through: system → light → dark → system
+                            switch themePreference {
+                            case "system":
+                                themePreference = "light"
+                            case "light":
+                                themePreference = "dark"
+                            case "dark":
+                                themePreference = "system"
+                            default:
+                                themePreference = "system"
+                            }
                         }) {
-                            Image(systemName: "arrow.up.arrow.down.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(.blue)
+                            Image(systemName: themeIconName)
+                                .font(.title3)
+                                .foregroundColor(.primary)
+                        }
+                        .padding(.trailing, 12)
+                        
+                        Button(action: { showModels = true }) {
+                            Image(systemName: "gear")
                         }
                     }
                     
-                    Spacer()
-                    
-                    // Solo/Duo Mode Toggle
+                    // Centered Solo/Duo Mode Toggle - Overlay in absolute center
                     Button(action: {
                         withAnimation {
                             isSoloMode.toggle()
@@ -291,22 +352,45 @@ struct ContentView: View {
                         .foregroundColor(isSoloMode ? .green : .purple)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(isSoloMode ? Color.green.opacity(0.1) : Color.purple.opacity(0.1))
-                        .cornerRadius(20)
-                    }
-                    
-                    Spacer()
-                    
-                    Button(action: { showModels = true }) {
-                        Image(systemName: "gear")
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke((isSoloMode ? Color.green : Color.purple).opacity(0.4), lineWidth: 1.5)
+                        )
+                        .shadow(color: (isSoloMode ? Color.green : Color.purple).opacity(0.2), radius: 6, x: 0, y: 3)
                     }
                 }
                 .padding()
-                .background(Color(UIColor.systemBackground))
+                .background(.thinMaterial)
+                .overlay(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.white.opacity(0.2), Color.white.opacity(0)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 1),
+                    alignment: .top
+                )
+                .overlay(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.white.opacity(0), Color.white.opacity(0.2)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 1),
+                    alignment: .bottom
+                )
+                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
                 
                 // MARK: - Bottom Section (Person B)
                 ZStack {
-                    bottomColor.opacity(0.1).edgesIgnoringSafeArea(.bottom)
+                    LinearGradient(
+                        gradient: Gradient(colors: [bottomColor.opacity(0.05), bottomColor.opacity(0.15)]),
+                        startPoint: .bottom,
+                        endPoint: .top
+                    )
+                    .edgesIgnoringSafeArea(.bottom)
                     
                     VStack(spacing: 15) {
                         Spacer()
@@ -323,12 +407,17 @@ struct ContentView: View {
                                             .font(.body)
                                             .fontWeight(.semibold)
                                             .foregroundColor(bottomColor)
-                                            .padding(10)
+                                            .padding(16)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                      }
                                      .frame(maxHeight: 100)
-                                     .background(Color.white.opacity(0.8))
-                                     .cornerRadius(12)
+                                     .background(.ultraThinMaterial)
+                                     .clipShape(RoundedRectangle(cornerRadius: 16))
+                                     .overlay(
+                                         RoundedRectangle(cornerRadius: 16)
+                                             .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                     )
+                                     .shadow(color: bottomColor.opacity(0.15), radius: 10, x: 0, y: 5)
                                      
                                      // 1. User Recording Button (Original Voice)
                                      Button(action: { whisperState.playLastRecording() }) {
@@ -359,9 +448,14 @@ struct ContentView: View {
                                          .font(.caption)
                                          .foregroundColor(bottomColor)
                                          .padding(.horizontal, 12)
-                                         .padding(.vertical, 4)
-                                         .background(Color.white.opacity(0.6))
-                                         .cornerRadius(12)
+                                         .padding(.vertical, 6)
+                                         .background(.thinMaterial)
+                                         .clipShape(Capsule())
+                                         .overlay(
+                                             Capsule()
+                                                 .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                                         )
+                                         .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
                                      }
                                  }
                              }
@@ -372,6 +466,25 @@ struct ContentView: View {
                         // Language Picker beside Record Button (when not recording)
                         if !isRecordingBottom {
                             HStack(spacing: 15) {
+                                Button(action: { showBottomLanguagePicker = true }) {
+                                    HStack {
+                                        Text(languageName(for: bottomLanguage))
+                                            .foregroundColor(.primary)
+                                        Image(systemName: "chevron.down")
+                                            .foregroundColor(.secondary)
+                                            .font(.caption)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(.thinMaterial)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.white.opacity(0.4), lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 3)
+                                }
+                                
                                 PersonControls(
                                     isRecording: isRecordingBottom,
                                     isPaused: whisperState.isPaused,
@@ -397,20 +510,6 @@ struct ContentView: View {
                                         Task { await whisperState.cancelRecording() }
                                     }
                                 )
-                                
-                                Button(action: { showBottomLanguagePicker = true }) {
-                                    HStack {
-                                        Text(languageName(for: bottomLanguage))
-                                            .foregroundColor(.primary)
-                                        Image(systemName: "chevron.down")
-                                            .foregroundColor(.secondary)
-                                            .font(.caption)
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(Color(UIColor.secondarySystemBackground))
-                                    .cornerRadius(8)
-                                }
                             }
                         } else {
                             // Show only controls when recording
@@ -446,8 +545,9 @@ struct ContentView: View {
                 .frame(maxHeight: .infinity)
             }
             .navigationBarHidden(true)
+            .preferredColorScheme(currentColorScheme)
             .sheet(isPresented: $showModels) {
-                SettingsView(whisperState: whisperState)
+                SettingsView(whisperState: whisperState, themePreference: $themePreference)
             }
             .sheet(isPresented: $showEditSheet) {
                 TextEditorSheet(
@@ -518,6 +618,116 @@ struct ContentView: View {
                 // Perform the translation for the current text
                 await whisperState.translateWithSession(session)
             }
+            }
+            
+            // MARK: - Glass Design Loading Screen
+            if whisperState.isLoadingModel {
+                ZStack {
+                    // Gradient background
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color(red: 0.95, green: 0.97, blue: 1.0),
+                            Color(red: 0.90, green: 0.94, blue: 0.98)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .ignoresSafeArea()
+                    
+                    VStack(spacing: 0) {
+                        Spacer()
+                        
+                        // Glass card container
+                        VStack(spacing: 24) {
+                            // Icon with glass effect
+                            ZStack {
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                                    .frame(width: 100, height: 100)
+                                    .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
+                                
+                                Image(systemName: "waveform.and.mic")
+                                    .font(.system(size: 48, weight: .light))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [Color.blue, Color.purple],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                            .padding(.bottom, 16)
+                            
+                            // App name
+                            Text("Local Translator")
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundColor(.primary)
+                            
+                            // Progress content in glass card
+                            VStack(spacing: 16) {
+                                // Glass progress bar
+                                GeometryReader { geometry in
+                                    ZStack(alignment: .leading) {
+                                        // Background track with glass
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(.ultraThinMaterial)
+                                            .frame(height: 8)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                                            )
+                                        
+                                        // Gradient progress fill
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [Color.blue, Color.purple],
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                            .frame(width: geometry.size.width * whisperState.loadingProgress, height: 8)
+                                            .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                                            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: whisperState.loadingProgress)
+                                    }
+                                }
+                                .frame(height: 8)
+                                .frame(maxWidth: 280)
+                                
+                                // Status text
+                                Text(whisperState.loadingMessage)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                
+                                // Progress percentage
+                                Text("\(Int(whisperState.loadingProgress * 100))%")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [Color.blue, Color.purple],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                            .padding(32)
+                            .background(.thinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 24))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 24)
+                                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                            )
+                            .shadow(color: Color.black.opacity(0.08), radius: 30, x: 0, y: 15)
+                        }
+                        .padding(.horizontal, 40)
+                        
+                        Spacer()
+                    }
+                }
+                .transition(.opacity)
+                .animation(.spring(response: 0.4, dampingFraction: 0.9), value: whisperState.isLoadingModel)
+            }
         }
 
         .onAppear {
@@ -531,6 +741,14 @@ struct ContentView: View {
 
     private func languageName(for code: String) -> String {
         languages.first { $0.1 == code }?.0 ?? code
+    }
+    
+    private var themeIconName: String {
+        switch themePreference {
+        case "light": return "sun.max.fill"
+        case "dark": return "moon.fill"
+        default: return "circle.lefthalf.filled" // System
+        }
     }
 }
 
@@ -619,11 +837,35 @@ struct PersonControls: View {
 
 struct SettingsView: View {
     @ObservedObject var whisperState: WhisperState
+    @Binding var themePreference: String
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
         NavigationStack {
             List {
+                Section(header: Text("Appearance")) {
+                    Picker("Theme", selection: $themePreference) {
+                        HStack {
+                            Image(systemName: "circle.lefthalf.filled")
+                            Text("System")
+                        }
+                        .tag("system")
+                        
+                        HStack {
+                            Image(systemName: "sun.max.fill")
+                            Text("Light")
+                        }
+                        .tag("light")
+                        
+                        HStack {
+                            Image(systemName: "moon.fill")
+                            Text("Dark")
+                        }
+                        .tag("dark")
+                    }
+                    .pickerStyle(.inline)
+                }
+                
                 Section(header: Text("Model Management")) {
                     NavigationLink(destination: ModelsView(whisperState: whisperState)) {
                         Label("Whisper Models (STT)", systemImage: "waveform")
@@ -890,9 +1132,12 @@ struct TextEditorSheet: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(
-                    Color.blue.opacity(0.1)
-                        .ignoresSafeArea(edges: .top)
+                .background(.ultraThinMaterial)
+                .overlay(
+                    Rectangle()
+                        .fill(Color.blue.opacity(0.2))
+                        .frame(height: 1),
+                    alignment: .bottom
                 )
                 
                 // Text editor
@@ -924,7 +1169,13 @@ struct TextEditorSheet: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(Color(UIColor.secondarySystemBackground))
+                .background(.thinMaterial)
+                .overlay(
+                    Rectangle()
+                        .fill(Color.white.opacity(0.2))
+                        .frame(height: 1),
+                    alignment: .top
+                )
             }
             .navigationTitle("Edit Text")
             .navigationBarTitleDisplayMode(.inline)

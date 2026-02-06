@@ -6,6 +6,9 @@ import Translation
 @MainActor
 class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     @Published var isModelLoaded = false
+    @Published var isLoadingModel = false
+    @Published var loadingMessage = ""
+    @Published var loadingProgress: Double = 0.0
     @Published var messageLog = ""
     @Published var canTranscribe = false
     @Published var isRecording = false
@@ -59,15 +62,23 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         super.init()
         synthesizer.delegate = self
         setupAudioSession()
+        
+        // Set loading state BEFORE starting async work
+        isLoadingModel = true
+        loadingMessage = "Loading AI model..."
+        loadingProgress = 0.0
+        
         loadModel()
     }
     
     func prepareForPlayback() {
-        setupAudioSession(isRecording: false)
+        Task.detached {
+            await self.setupAudioSessionAsync(isRecording: false)
+        }
     }
     
     // Configure Audio Session for Loudspeaker
-    private func setupAudioSession(isRecording: Bool = true) {
+    nonisolated private func setupAudioSessionAsync(isRecording: Bool = true) async {
         let session = AVAudioSession.sharedInstance()
         let category: AVAudioSession.Category = isRecording ? .playAndRecord : .playback
         let options: AVAudioSession.CategoryOptions = isRecording ? [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP, .allowAirPlay] : []
@@ -83,21 +94,62 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         }
     }
     
-    func loadModel(path: URL? = nil, log: Bool = true) {
+    // Synchronous version for init only
+    nonisolated private func setupAudioSession() {
+        let session = AVAudioSession.sharedInstance()
         do {
-            whisperContext = nil
-            if (log) { messageLog += "Loading model...\n" }
-            let modelUrl = path ?? builtInModelUrl
-            if let modelUrl {
-                whisperContext = try WhisperContext.createContext(path: modelUrl.path())
-                if (log) { messageLog += "Loaded model \(modelUrl.lastPathComponent)\n" }
-            } else {
-                if (log) { messageLog += "Could not locate model\n" }
-            }
-            canTranscribe = true
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP, .allowAirPlay])
+            try session.setActive(true)
         } catch {
-            print(error.localizedDescription)
-            if (log) { messageLog += "\(error.localizedDescription)\n" }
+            print("Failed to setup audio session: \(error.localizedDescription)")
+        }
+    }
+    
+    func loadModel(path: URL? = nil, log: Bool = true) {
+        Task {
+            do {
+                loadingProgress = 0.1
+                whisperContext = nil
+                if (log) { messageLog += "Loading model...\n" }
+                
+                loadingProgress = 0.2
+                await MainActor.run {
+                    loadingMessage = "Preparing model files..."
+                }
+                
+                let modelUrl = path ?? builtInModelUrl
+                if let modelUrl {
+                    loadingProgress = 0.3
+                    await MainActor.run {
+                        loadingMessage = "Initializing Neural Engine..."
+                    }
+                    
+                    try await Task.sleep(nanoseconds: 300_000_000) // Small delay for UI update
+                    loadingProgress = 0.5
+                    
+                    whisperContext = try await WhisperContext.createContext(path: modelUrl.path())
+                    
+                    loadingProgress = 0.9
+                    await MainActor.run {
+                        loadingMessage = "Finalizing..."
+                    }
+                    
+                    if (log) { messageLog += "Loaded model \(modelUrl.lastPathComponent)\n" }
+                } else {
+                    if (log) { messageLog += "Could not locate model\n" }
+                }
+                
+                loadingProgress = 1.0
+                canTranscribe = true
+                isModelLoaded = true
+                
+                try await Task.sleep(nanoseconds: 200_000_000)
+                isLoadingModel = false
+            } catch {
+                print(error.localizedDescription)
+                if (log) { messageLog += "\(error.localizedDescription)\n" }
+                isLoadingModel = false
+            }
         }
     }
 
@@ -193,8 +245,6 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
             return
         }
         
-        prepareForPlayback()
-        
         let utterance = AVSpeechUtterance(string: text)
         
         // Check for user-selected voice preference first
@@ -218,7 +268,15 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         
         utterance.rate = 0.52  // Slightly faster for quicker response
         utterance.preUtteranceDelay = 0.0  // No delay before speaking
-        synthesizer.speak(utterance)
+        
+        // Prepare audio session and speak after brief delay
+        Task.detached { [weak self] in
+            await self?.setupAudioSessionAsync(isRecording: false)
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms for session to stabilize
+            await MainActor.run {
+                self?.synthesizer.speak(utterance)
+            }
+        }
     }
     
     func setVoice(_ identifier: String, for languageCode: String) {
@@ -278,7 +336,8 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
             self.translatedText = ""
         }
         
-        setupAudioSession(isRecording: true) // Ensure microphone + loudspeaker
+        // Ensure microphone + loudspeaker
+        await setupAudioSessionAsync(isRecording: true)
         
         // Update direction state
         self.currentSourceLanguage = source
@@ -312,7 +371,7 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         isPaused = false
         
         // Prepare audio session for TTS early to avoid delay
-        setupAudioSession(isRecording: false)
+        await setupAudioSessionAsync(isRecording: false)
         
         if let recordedFile {
             await transcribeAudio(recordedFile)
@@ -329,8 +388,13 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         }
         
         stopPlayback()
-        setupAudioSession(isRecording: false)
-        try? startPlayback(url)
+        
+        Task {
+            await setupAudioSessionAsync(isRecording: false)
+            try? await MainActor.run {
+                try startPlayback(url)
+            }
+        }
     }
     
     func pauseRecording() async {
@@ -361,7 +425,7 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         }
     }
     
-    private func requestRecordPermission(response: @escaping (Bool) -> Void) {
+    nonisolated private func requestRecordPermission(response: @escaping (Bool) -> Void) {
 #if os(macOS)
         response(true)
 #else
