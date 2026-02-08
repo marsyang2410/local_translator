@@ -335,25 +335,56 @@ struct ContentView: View {
                                 .font(.caption)
                                 .foregroundColor(.red)
                         } else {
-                            Button(action: {
-                                // Swap Languages
-                                let tempLang = topLanguage
-                                topLanguage = bottomLanguage
-                                bottomLanguage = tempLang
+                            HStack(spacing: 12) {
+                                // Swap Languages Button
+                                Button(action: {
+                                    // Swap Languages
+                                    let tempLang = topLanguage
+                                    topLanguage = bottomLanguage
+                                    bottomLanguage = tempLang
+                                    
+                                    // Swap Colors
+                                    let tempColor = topColor
+                                    topColor = bottomColor
+                                    bottomColor = tempColor
+                                    
+                                    // Swap Message Content
+                                    let tempText = whisperState.transcribedText
+                                    whisperState.transcribedText = whisperState.translatedText
+                                    whisperState.translatedText = tempText
+                                }) {
+                                    Image(systemName: "arrow.up.arrow.down.circle.fill")
+                                        .font(.title2)
+                                        .foregroundColor(.blue)
+                                }
                                 
-                                // Swap Colors
-                                let tempColor = topColor
-                                topColor = bottomColor
-                                bottomColor = tempColor
-                                
-                                // Swap Message Content
-                                let tempText = whisperState.transcribedText
-                                whisperState.transcribedText = whisperState.translatedText
-                                whisperState.translatedText = tempText
-                            }) {
-                                Image(systemName: "arrow.up.arrow.down.circle.fill")
-                                    .font(.title2)
-                                    .foregroundColor(.blue)
+                                // Re-translate Button
+                                Button(action: {
+                                    guard !whisperState.transcribedText.isEmpty else { return }
+                                    
+                                    let source = isTopSpeech ? topLanguage : bottomLanguage
+                                    let target = isTopSpeech ? bottomLanguage : topLanguage
+                                    
+                                    whisperState.currentTargetLanguage = target
+                                    
+                                    // Skip if same language
+                                    guard source != target else {
+                                        whisperState.translatedText = whisperState.transcribedText
+                                        whisperState.speak(text: whisperState.transcribedText, language: target)
+                                        return
+                                    }
+                                    
+                                    // Trigger new translation
+                                    translationConfig = TranslationSession.Configuration(
+                                        source: Locale.Language(identifier: source),
+                                        target: Locale.Language(identifier: target)
+                                    )
+                                }) {
+                                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                                        .font(.title2)
+                                        .foregroundColor(.green)
+                                }
+                                .disabled(whisperState.transcribedText.isEmpty)
                             }
                         }
                         
