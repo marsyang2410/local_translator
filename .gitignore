@@ -6,6 +6,15 @@
 build/
 DerivedData/
 
+## IPA export artifacts
+*.ipa
+LocalTranslatorApp/build/
+LocalTranslatorApp/build/ipa/
+LocalTranslatorApp/build/*.xcarchive/
+**/DistributionSummary.plist
+**/ExportOptions.plist
+**/Packaging.log
+
 ## OS X
 .DS_Store
 

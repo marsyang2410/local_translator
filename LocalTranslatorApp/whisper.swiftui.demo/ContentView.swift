@@ -649,7 +649,13 @@ struct ContentView: View {
             .navigationBarHidden(true)
             .preferredColorScheme(currentColorScheme)
             .sheet(isPresented: $showModels) {
-                SettingsView(whisperState: whisperState, themePreference: $themePreference)
+                SettingsView(
+                    whisperState: whisperState,
+                    themePreference: $themePreference,
+                    onModelActivated: {
+                        showModels = false
+                    }
+                )
             }
             .sheet(isPresented: $showEditSheet) {
                 TextEditorSheet(
@@ -722,8 +728,8 @@ struct ContentView: View {
             }
             }
             
-            // MARK: - Glass Design Loading Screen
-            if whisperState.isLoadingModel {
+            // MARK: - Glass Design Loading Screen or No Model Prompt
+            if whisperState.isLoadingModel || !whisperState.canTranscribe {
                 ZStack {
                     // Gradient background
                     LinearGradient(
@@ -748,7 +754,7 @@ struct ContentView: View {
                                     .frame(width: 100, height: 100)
                                     .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
                                 
-                                Image(systemName: "waveform.and.mic")
+                                Image(systemName: whisperState.isLoadingModel ? "waveform.and.mic" : "gear.circle")
                                     .font(.system(size: 48, weight: .light))
                                     .foregroundStyle(
                                         LinearGradient(
@@ -767,51 +773,89 @@ struct ContentView: View {
                             
                             // Progress content in glass card
                             VStack(spacing: 16) {
-                                // Glass progress bar
-                                GeometryReader { geometry in
-                                    ZStack(alignment: .leading) {
-                                        // Background track with glass
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(.ultraThinMaterial)
-                                            .frame(height: 8)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                                if whisperState.isLoadingModel {
+                                    // Glass progress bar
+                                    GeometryReader { geometry in
+                                        ZStack(alignment: .leading) {
+                                            // Background track with glass
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(.ultraThinMaterial)
+                                                .frame(height: 8)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                                                )
+                                            
+                                            // Gradient progress fill
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(
+                                                    LinearGradient(
+                                                        colors: [Color.blue, Color.purple],
+                                                        startPoint: .leading,
+                                                        endPoint: .trailing
+                                                    )
+                                                )
+                                                .frame(width: geometry.size.width * whisperState.loadingProgress, height: 8)
+                                                .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                                                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: whisperState.loadingProgress)
+                                        }
+                                    }
+                                    .frame(height: 8)
+                                    .frame(maxWidth: 280)
+                                    
+                                    // Status text
+                                    Text(whisperState.loadingMessage)
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.center)
+                                    
+                                    // Progress percentage
+                                    Text("\(Int(whisperState.loadingProgress * 100))%")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [Color.blue, Color.purple],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
                                             )
+                                        )
+                                } else {
+                                    // No model loaded - show prompt
+                                    VStack(spacing: 12) {
+                                        Text("No Model Selected")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(.primary)
                                         
-                                        // Gradient progress fill
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(
+                                        Text("Please download a Whisper model to start transcribing.")
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundColor(.secondary)
+                                            .multilineTextAlignment(.center)
+                                        
+                                        Spacer()
+                                            .frame(height: 8)
+                                        
+                                        Button {
+                                            showModels = true
+                                        } label: {
+                                            HStack(spacing: 8) {
+                                                Image(systemName: "icloud.and.arrow.down.fill")
+                                                Text("Download Model")
+                                                    .fontWeight(.semibold)
+                                            }
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 24)
+                                            .padding(.vertical, 12)
+                                            .background(
                                                 LinearGradient(
                                                     colors: [Color.blue, Color.purple],
                                                     startPoint: .leading,
                                                     endPoint: .trailing
                                                 )
                                             )
-                                            .frame(width: geometry.size.width * whisperState.loadingProgress, height: 8)
-                                            .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
-                                            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: whisperState.loadingProgress)
+                                            .cornerRadius(8)
+                                        }
                                     }
                                 }
-                                .frame(height: 8)
-                                .frame(maxWidth: 280)
-                                
-                                // Status text
-                                Text(whisperState.loadingMessage)
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                                
-                                // Progress percentage
-                                Text("\(Int(whisperState.loadingProgress * 100))%")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: [Color.blue, Color.purple],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
                             }
                             .padding(32)
                             .background(.thinMaterial)
@@ -827,6 +871,7 @@ struct ContentView: View {
                         Spacer()
                     }
                 }
+                .environment(\.colorScheme, .light)
                 .transition(.opacity)
                 .animation(.spring(response: 0.4, dampingFraction: 0.9), value: whisperState.isLoadingModel)
             }
@@ -945,6 +990,7 @@ struct PersonControls: View {
 struct SettingsView: View {
     @ObservedObject var whisperState: WhisperState
     @Binding var themePreference: String
+    var onModelActivated: (() -> Void)? = nil
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
@@ -965,7 +1011,7 @@ struct SettingsView: View {
                 }
                 
                 Section(header: Text("Model Management")) {
-                    NavigationLink(destination: ModelsView(whisperState: whisperState)) {
+                    NavigationLink(destination: ModelsView(whisperState: whisperState, onModelActivated: onModelActivated)) {
                         Label("Whisper Models (STT)", systemImage: "waveform")
                     }
                     
@@ -1417,39 +1463,95 @@ struct LanguageRowButton: View {
 
 struct ModelsView: View {
     @ObservedObject var whisperState: WhisperState
+    var onModelActivated: (() -> Void)? = nil
     @Environment(\.dismiss) var dismiss
+    @AppStorage("selectedModelPath") private var selectedModelPath: String = ""
+    @StateObject private var downloadManager = ModelDownloadManager()
     
-    // Model definitions
+    // Complete list of all Whisper models from Hugging Face
     private static let models: [WhisperModelDescriptor] = [
-        // Quantized Models (Fastest) - Best for "VOSK-like" speed
-        WhisperModelDescriptor(name: "Tiny (Fast) ⚡️", info: "English (Q5_1, ~31 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin", filename: "tiny.en-q5_1.bin"),
-        WhisperModelDescriptor(name: "Base (Fast) ⚡️", info: "English (Q5_1, ~57 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q5_1.bin", filename: "base.en-q5_1.bin"),
-        WhisperModelDescriptor(name: "Small (Fast) ⚡️", info: "English (Q5_1, ~180 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin", filename: "small.en-q5_1.bin"),
+        // ========== TURBO MODELS (FASTEST - RECOMMENDED) ==========
+        WhisperModelDescriptor(name: "🚀 Large v3 Turbo (Q5) - FASTEST", info: "574 MB, Multilingual", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin", filename: "ggml-large-v3-turbo-q5_0.bin"),
+        WhisperModelDescriptor(name: "🚀 Large v3 Turbo (Q8) - BETTER", info: "874 MB, Multilingual", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q8_0.bin", filename: "ggml-large-v3-turbo-q8_0.bin"),
+        WhisperModelDescriptor(name: "🚀 Large v3 Turbo (F16) - FULL", info: "1.62 GB, Multilingual", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin", filename: "ggml-large-v3-turbo.bin"),
         
-        // Standard Models (Higher Precision)
-        WhisperModelDescriptor(name: "tiny", info: "(F16, 75 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin", filename: "tiny.bin"),
-        WhisperModelDescriptor(name: "tiny.en", info: "(F16, 75 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin", filename: "tiny.en.bin"),
-        WhisperModelDescriptor(name: "base", info: "(F16, 142 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin", filename: "base.bin"),
-        WhisperModelDescriptor(name: "base.en", info: "(F16, 142 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin", filename: "base.en.bin"),
-        WhisperModelDescriptor(name: "small", info: "(F16, 466 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin", filename: "small.bin"),
-        WhisperModelDescriptor(name: "small.en", info: "(F16, 466 MiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin", filename: "small.en.bin"),
-        WhisperModelDescriptor(name: "medium", info: "(F16, 1.5 GiB)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin", filename: "medium.bin"),
+        // ========== TINY MODELS ==========
+        WhisperModelDescriptor(name: "Tiny (Q5) - Multilingual", info: "32 MB, Fast", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin", filename: "ggml-tiny-q5_1.bin"),
+        WhisperModelDescriptor(name: "Tiny (Q8) - Multilingual", info: "43 MB, Fast", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q8_0.bin", filename: "ggml-tiny-q8_0.bin"),
+        WhisperModelDescriptor(name: "Tiny (F16) - Multilingual", info: "77 MB, Fast", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin", filename: "ggml-tiny.bin"),
+        WhisperModelDescriptor(name: "Tiny English (Q5)", info: "32 MB, Fast (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin", filename: "ggml-tiny.en-q5_1.bin"),
+        WhisperModelDescriptor(name: "Tiny English (Q8)", info: "43 MB, Fast (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q8_0.bin", filename: "ggml-tiny.en-q8_0.bin"),
+        WhisperModelDescriptor(name: "Tiny English (F16)", info: "77 MB, Fast (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin", filename: "ggml-tiny.en.bin"),
+        
+        // ========== BASE MODELS ==========
+        WhisperModelDescriptor(name: "Base (Q5) - Multilingual", info: "59 MB, Medium", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin", filename: "ggml-base-q5_1.bin"),
+        WhisperModelDescriptor(name: "Base (Q8) - Multilingual", info: "81 MB, Medium", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q8_0.bin", filename: "ggml-base-q8_0.bin"),
+        WhisperModelDescriptor(name: "Base (F16) - Multilingual", info: "142 MB, Medium", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin", filename: "ggml-base.bin"),
+        WhisperModelDescriptor(name: "Base English (Q5)", info: "59 MB, Medium (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q5_1.bin", filename: "ggml-base.en-q5_1.bin"),
+        WhisperModelDescriptor(name: "Base English (Q8)", info: "81 MB, Medium (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en-q8_0.bin", filename: "ggml-base.en-q8_0.bin"),
+        WhisperModelDescriptor(name: "Base English (F16)", info: "142 MB, Medium (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin", filename: "ggml-base.en.bin"),
+        
+        // ========== SMALL MODELS ==========
+        WhisperModelDescriptor(name: "Small (Q5) - Multilingual", info: "190 MB, Better", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin", filename: "ggml-small-q5_1.bin"),
+        WhisperModelDescriptor(name: "Small (Q8) - Multilingual", info: "264 MB, Better", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin", filename: "ggml-small-q8_0.bin"),
+        WhisperModelDescriptor(name: "Small (F16) - Multilingual", info: "488 MB, Better", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin", filename: "ggml-small.bin"),
+        WhisperModelDescriptor(name: "Small English (Q5)", info: "190 MB, Better (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin", filename: "ggml-small.en-q5_1.bin"),
+        WhisperModelDescriptor(name: "Small English (Q8)", info: "264 MB, Better (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q8_0.bin", filename: "ggml-small.en-q8_0.bin"),
+        WhisperModelDescriptor(name: "Small English (F16)", info: "488 MB, Better (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin", filename: "ggml-small.en.bin"),
+        
+        // ========== MEDIUM MODELS ==========
+        WhisperModelDescriptor(name: "Medium (Q5) - Multilingual", info: "539 MB, Accurate", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium-q5_0.bin", filename: "ggml-medium-q5_0.bin"),
+        WhisperModelDescriptor(name: "Medium (Q8) - Multilingual", info: "823 MB, Accurate", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium-q8_0.bin", filename: "ggml-medium-q8_0.bin"),
+        WhisperModelDescriptor(name: "Medium (F16) - Multilingual", info: "1.53 GB, Accurate", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin", filename: "ggml-medium.bin"),
+        WhisperModelDescriptor(name: "Medium English (Q5)", info: "539 MB, Accurate (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en-q5_0.bin", filename: "ggml-medium.en-q5_0.bin"),
+        WhisperModelDescriptor(name: "Medium English (Q8)", info: "823 MB, Accurate (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en-q8_0.bin", filename: "ggml-medium.en-q8_0.bin"),
+        WhisperModelDescriptor(name: "Medium English (F16)", info: "1.53 GB, Accurate (English only)", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin", filename: "ggml-medium.en.bin"),
+        
+        // ========== LARGE MODELS ==========
+        WhisperModelDescriptor(name: "Large v3 (Q5) - Multilingual", info: "1.08 GB, Very Accurate", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin", filename: "ggml-large-v3-q5_0.bin"),
+        WhisperModelDescriptor(name: "Large v3 (F16) - Multilingual", info: "3.1 GB, Very Accurate", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin", filename: "ggml-large-v3.bin"),
+        
+        WhisperModelDescriptor(name: "Large v2 (Q5) - Multilingual", info: "1.08 GB, Very Accurate", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2-q5_0.bin", filename: "ggml-large-v2-q5_0.bin"),
+        WhisperModelDescriptor(name: "Large v2 (Q8) - Multilingual", info: "1.66 GB, Very Accurate", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2-q8_0.bin", filename: "ggml-large-v2-q8_0.bin"),
+        WhisperModelDescriptor(name: "Large v2 (F16) - Multilingual", info: "3.09 GB, Very Accurate", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v2.bin", filename: "ggml-large-v2.bin"),
+        
+        WhisperModelDescriptor(name: "Large v1 (F16) - Multilingual", info: "3.09 GB, Very Accurate", url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v1.bin", filename: "ggml-large-v1.bin"),
     ]
 
     var body: some View {
         List {
-            Section(header: Text("Models")) {
+            Section(header: Text("🚀 Recommended").foregroundColor(.orange)) {
+                Text("For best balance of speed & accuracy on iOS, choose a Turbo model with Q5 quantization")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Section(header: Text("📥 Download Models")) {
                 ForEach(ModelsView.models) { model in
-                    DownloadButton(model: model, whisperState: whisperState)
-                        .onLoad { model in
+                    DownloadButton(
+                        model: model,
+                        whisperState: whisperState,
+                        selectedModelPath: $selectedModelPath,
+                        downloadManager: downloadManager,
+                        onLoad: { model in
+                            selectedModelPath = model.fileURL.path
                             whisperState.loadModel(path: model.fileURL)
+                            onModelActivated?()
                             dismiss()
                         }
+                    )
                 }
+            }
+            
+            Section(footer: Text("After downloading a model, tap LOAD to activate it. Downloaded models are saved in the app's storage.")) {
+                EmptyView()
             }
         }
         .listStyle(GroupedListStyle())
-        .navigationTitle("Select Model")
+        .navigationTitle("Whisper Models (STT)")
+        .onAppear {
+            downloadManager.syncStatuses(models: ModelsView.models)
+        }
     }
 }
 
@@ -1468,23 +1570,177 @@ struct WhisperModelDescriptor: Identifiable, Equatable {
     }
 }
 
-// Download Button Component
-// Download Button Component
-struct DownloadButton: View {
-    let model: WhisperModelDescriptor
-    @ObservedObject var whisperState: WhisperState
-    var onLoad: ((WhisperModelDescriptor) -> Void)?
-    
-    @State private var status: DownloadStatus = .cloud
-    @State private var progress: Double = 0.0
-    @State private var downloadTask: URLSessionDownloadTask?
-    @State private var progressObservation: NSKeyValueObservation?
-    
+@MainActor
+final class ModelDownloadManager: NSObject, ObservableObject, URLSessionDownloadDelegate, URLSessionTaskDelegate {
     enum DownloadStatus {
         case cloud
         case downloading
         case downloaded
         case error
+    }
+
+    @Published private var statuses: [String: DownloadStatus] = [:]
+    @Published private var progresses: [String: Double] = [:]
+
+    private var taskToFilename: [Int: String] = [:]
+
+    private lazy var session: URLSession = {
+        let config = URLSessionConfiguration.background(withIdentifier: "local.translator.whisper.model.downloads")
+        config.isDiscretionary = false
+        config.sessionSendsLaunchEvents = true
+        config.waitsForConnectivity = true
+        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    }()
+
+    override init() {
+        super.init()
+        restoreRunningTasks()
+    }
+
+    func syncStatuses(models: [WhisperModelDescriptor]) {
+        for model in models {
+            if statuses[model.filename] == .downloading { continue }
+            statuses[model.filename] = FileManager.default.fileExists(atPath: model.fileURL.path) ? .downloaded : .cloud
+            if progresses[model.filename] == nil {
+                progresses[model.filename] = 0.0
+            }
+        }
+    }
+
+    func status(for model: WhisperModelDescriptor) -> DownloadStatus {
+        statuses[model.filename] ?? .cloud
+    }
+
+    func progress(for model: WhisperModelDescriptor) -> Double {
+        progresses[model.filename] ?? 0.0
+    }
+
+    func startDownload(_ model: WhisperModelDescriptor) {
+        guard let remoteURL = URL(string: model.url) else {
+            statuses[model.filename] = .error
+            return
+        }
+
+        if status(for: model) == .downloading { return }
+
+        try? FileManager.default.createDirectory(
+            at: model.fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let task = session.downloadTask(with: remoteURL)
+        task.taskDescription = model.filename
+        taskToFilename[task.taskIdentifier] = model.filename
+
+        statuses[model.filename] = .downloading
+        progresses[model.filename] = 0.0
+        task.resume()
+    }
+
+    func cancelDownload(_ model: WhisperModelDescriptor) {
+        session.getAllTasks { tasks in
+            let targetTasks = tasks.filter { $0.taskDescription == model.filename }
+            for task in targetTasks {
+                task.cancel()
+            }
+            Task { @MainActor in
+                self.statuses[model.filename] = .cloud
+                self.progresses[model.filename] = 0.0
+            }
+        }
+    }
+
+    private func restoreRunningTasks() {
+        session.getAllTasks { tasks in
+            Task { @MainActor in
+                for task in tasks {
+                    guard let filename = task.taskDescription else { continue }
+                    self.taskToFilename[task.taskIdentifier] = filename
+                    self.statuses[filename] = .downloading
+                    self.progresses[filename] = task.progress.fractionCompleted
+                }
+            }
+        }
+    }
+
+    nonisolated private func modelFileURL(filename: String) -> URL {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documents.appendingPathComponent("models").appendingPathComponent(filename)
+    }
+
+    nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        guard let filename = downloadTask.taskDescription else { return }
+        let value = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        Task { @MainActor in
+            self.statuses[filename] = .downloading
+            self.progresses[filename] = value
+        }
+    }
+
+    nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        guard let filename = downloadTask.taskDescription else { return }
+        let destination = modelFileURL(filename: filename)
+
+        do {
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.moveItem(at: location, to: destination)
+            Task { @MainActor in
+                self.statuses[filename] = .downloaded
+                self.progresses[filename] = 1.0
+            }
+        } catch {
+            Task { @MainActor in
+                self.statuses[filename] = .error
+            }
+        }
+    }
+
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let filename = task.taskDescription else { return }
+        guard let error = error as NSError? else { return }
+
+        Task { @MainActor in
+            if error.code == NSURLErrorCancelled {
+                self.statuses[filename] = .cloud
+                self.progresses[filename] = 0.0
+            } else {
+                self.statuses[filename] = .error
+            }
+        }
+    }
+}
+
+// Download Button Component
+struct DownloadButton: View {
+    let model: WhisperModelDescriptor
+    @ObservedObject var whisperState: WhisperState
+    @Binding var selectedModelPath: String
+    @ObservedObject var downloadManager: ModelDownloadManager
+    var onLoad: ((WhisperModelDescriptor) -> Void)?
+
+    private enum DisplayStatus {
+        case cloud
+        case downloading
+        case downloaded
+        case active
+        case error
+    }
+
+    private var displayStatus: DisplayStatus {
+        if selectedModelPath == model.fileURL.path {
+            return .active
+        }
+        switch downloadManager.status(for: model) {
+        case .cloud:
+            return .cloud
+        case .downloading:
+            return .downloading
+        case .downloaded:
+            return .downloaded
+        case .error:
+            return .error
+        }
     }
     
     var body: some View {
@@ -1500,9 +1756,9 @@ struct DownloadButton: View {
             Spacer()
             
             ZStack {
-                switch status {
+                switch displayStatus {
                 case .cloud, .error:
-                    Button(action: downloadModel) {
+                    Button(action: { downloadManager.startDownload(model) }) {
                         Image(systemName: "icloud.and.arrow.down")
                             .font(.title2)
                             .foregroundColor(.blue)
@@ -1510,14 +1766,14 @@ struct DownloadButton: View {
                     .buttonStyle(.plain)
                     
                 case .downloading:
-                    Button(action: cancelDownload) {
+                    Button(action: { downloadManager.cancelDownload(model) }) {
                         ZStack {
                             Circle()
                                 .stroke(Color(.systemGray5), lineWidth: 3)
                                 .frame(width: 32, height: 32)
                             
                             Circle()
-                                .trim(from: 0, to: progress)
+                                .trim(from: 0, to: downloadManager.progress(for: model))
                                 .stroke(Color.blue, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                                 .frame(width: 32, height: 32)
                                 .rotationEffect(.degrees(-90))
@@ -1542,6 +1798,15 @@ struct DownloadButton: View {
                     }
                     .buttonStyle(.plain)
                     .fixedSize()
+                    
+                case .active:
+                    Text("✓ ACTIVE")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .background(Color.green.opacity(0.2))
+                        .foregroundColor(.green)
+                        .clipShape(Capsule())
                 }
             }
             .frame(minWidth: 70)
@@ -1549,78 +1814,8 @@ struct DownloadButton: View {
         }
         .padding(.vertical, 8)
         .onAppear {
-            checkStatus()
+            downloadManager.syncStatuses(models: [model])
         }
-        .onDisappear {
-            progressObservation?.invalidate()
-        }
-    }
-    
-    private func checkStatus() {
-        if FileManager.default.fileExists(atPath: model.fileURL.path) {
-            status = .downloaded
-        } else {
-            status = .cloud
-        }
-    }
-    
-    private func downloadModel() {
-        guard let url = URL(string: model.url) else { return }
-        
-        status = .downloading
-        progress = 0.0
-        
-        // Create directory if needed
-        try? FileManager.default.createDirectory(at: model.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        
-        let task = URLSession.shared.downloadTask(with: url) { localURL, response, error in
-            if let localURL = localURL {
-                // Success
-                try? FileManager.default.removeItem(at: model.fileURL) // Clean old if exists
-                try? FileManager.default.moveItem(at: localURL, to: model.fileURL)
-                DispatchQueue.main.async {
-                    self.status = .downloaded
-                    self.progressObservation?.invalidate()
-                }
-            } else if let error = (error as NSError?), error.code == NSURLErrorCancelled {
-                // Cancelled
-                DispatchQueue.main.async {
-                    self.status = .cloud
-                    self.progress = 0.0
-                }
-            } else {
-                // Error
-                DispatchQueue.main.async {
-                    self.status = .error
-                    self.progressObservation?.invalidate()
-                }
-            }
-        }
-        
-        // Setup Progress Observation
-        progressObservation = task.progress.observe(\.fractionCompleted) { obs, _ in
-            DispatchQueue.main.async {
-                self.progress = obs.fractionCompleted
-            }
-        }
-        
-        downloadTask = task
-        task.resume()
-    }
-    
-    private func cancelDownload() {
-        downloadTask?.cancel()
-        progressObservation?.invalidate()
-        downloadTask = nil
-        status = .cloud
-        progress = 0.0
-    }
-}
-
-// Helper extension for closure binding
-extension View {
-    func onLoad(perform action: @escaping (WhisperModelDescriptor) -> Void) -> some View {
-        return self
     }
 }
 

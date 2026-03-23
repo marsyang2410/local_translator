@@ -15,6 +15,7 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
     @Published var isPaused = false
     @Published var isPlayingTTS = false
     @Published var isPlayingAudio = false
+    @Published var isTranscribing = false
     
     // Translation properties
     @Published var transcribedText: String = ""
@@ -39,8 +40,12 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
     // Store user preferences for voice per language code
     @Published var preferredVoices: [String: String] = [:]
     
+    // Track the selected model in UserDefaults
+    @AppStorage("selectedModelPath") private var selectedModelPath: String = ""
+    
     private var builtInModelUrl: URL? {
-        Bundle.main.url(forResource: "ggml-base", withExtension: "bin", subdirectory: "models")
+        // No longer using bundled model - models are downloaded on demand
+        nil
     }
     
     private var sampleUrl: URL? {
@@ -63,12 +68,19 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         synthesizer.delegate = self
         setupAudioSession()
         
-        // Set loading state BEFORE starting async work
-        isLoadingModel = true
-        loadingMessage = "Loading AI model..."
-        loadingProgress = 0.0
-        
-        loadModel()
+        // Check if a model has been previously selected
+        if !selectedModelPath.isEmpty && FileManager.default.fileExists(atPath: selectedModelPath) {
+            isLoadingModel = true
+            loadingMessage = "Loading selected model..."
+            loadingProgress = 0.0
+            loadModel(path: URL(fileURLWithPath: selectedModelPath))
+        } else {
+            // No model selected yet - user will need to select one from settings
+            isLoadingModel = false
+            canTranscribe = false
+            loadingMessage = "Please select a model from Settings"
+            messageLog += "No model loaded. Please go to Settings > Whisper Models to download one.\n"
+        }
     }
     
     func prepareForPlayback() {
@@ -81,7 +93,7 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
     nonisolated private func setupAudioSessionAsync(isRecording: Bool = true) async {
         let session = AVAudioSession.sharedInstance()
         let category: AVAudioSession.Category = isRecording ? .playAndRecord : .playback
-        let options: AVAudioSession.CategoryOptions = isRecording ? [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP, .allowAirPlay] : []
+        let options: AVAudioSession.CategoryOptions = isRecording ? [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .allowAirPlay] : []
         
         // Only update if category or options changed to avoid audio engine flickers
         if session.category != category {
@@ -98,7 +110,7 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
     nonisolated private func setupAudioSession() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP, .allowAirPlay])
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .allowAirPlay])
             try session.setActive(true)
         } catch {
             print("Failed to setup audio session: \(error.localizedDescription)")
@@ -106,6 +118,12 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
     }
     
     func loadModel(path: URL? = nil, log: Bool = true) {
+        isLoadingModel = true
+        isModelLoaded = false
+        canTranscribe = false
+        loadingProgress = 0.0
+        loadingMessage = "Loading model..."
+
         Task {
             do {
                 loadingProgress = 0.1
@@ -127,7 +145,7 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
                     try await Task.sleep(nanoseconds: 300_000_000) // Small delay for UI update
                     loadingProgress = 0.5
                     
-                    whisperContext = try await WhisperContext.createContext(path: modelUrl.path())
+                    whisperContext = try WhisperContext.createContext(path: modelUrl.path())
                     
                     loadingProgress = 0.9
                     await MainActor.run {
@@ -148,6 +166,9 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
             } catch {
                 print(error.localizedDescription)
                 if (log) { messageLog += "\(error.localizedDescription)\n" }
+                canTranscribe = false
+                isModelLoaded = false
+                loadingMessage = "Failed to load model"
                 isLoadingModel = false
             }
         }
@@ -190,15 +211,17 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
     }
     
     private func transcribeAudio(_ url: URL) async {
-        if (!canTranscribe) {
+        if (!canTranscribe || isTranscribing) {
             return
         }
         guard let whisperContext else {
             return
         }
+
+        isTranscribing = true
+        defer { isTranscribing = false }
         
         do {
-            canTranscribe = false
             messageLog += "Reading wave samples...\n"
             let data = try readAudioSamples(url)
             messageLog += "Transcribing data...\n"
@@ -225,8 +248,6 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
             print(error.localizedDescription)
             messageLog += "\(error.localizedDescription)\n"
         }
-        
-        canTranscribe = true
     }
     
 
@@ -270,12 +291,10 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         utterance.preUtteranceDelay = 0.0  // No delay before speaking
         
         // Prepare audio session and speak after brief delay
-        Task.detached { [weak self] in
-            await self?.setupAudioSessionAsync(isRecording: false)
+        Task {
+            await setupAudioSessionAsync(isRecording: false)
             try? await Task.sleep(nanoseconds: 50_000_000) // 50ms for session to stabilize
-            await MainActor.run {
-                self?.synthesizer.speak(utterance)
-            }
+            synthesizer.speak(utterance)
         }
     }
     
@@ -351,7 +370,7 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         self.currentTargetLanguage = target
         
         do {
-            await stopPlayback()
+            stopPlayback()
             let file = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 .appending(path: "output.wav")
             try await self.recorder.startRecording(toOutputFile: file, delegate: self)
@@ -430,24 +449,22 @@ class WhisperState: NSObject, ObservableObject, AVAudioRecorderDelegate, AVSpeec
         }
     }
     
-    nonisolated private func requestRecordPermission(response: @escaping (Bool) -> Void) {
-#if os(macOS)
-        response(true)
-#else
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            response(granted)
-        }
-#endif
-    }
-    
     // Async version for modern Swift concurrency
     nonisolated private func requestRecordPermissionAsync() async -> Bool {
 #if os(macOS)
         return true
 #else
-        return await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                continuation.resume(returning: granted)
+        if #available(iOS 17.0, *) {
+            return await withCheckedContinuation { continuation in
+                AVAudioApplication.requestRecordPermission { granted in
+                    continuation.resume(returning: granted)
+                }
+            }
+        } else {
+            return await withCheckedContinuation { continuation in
+                AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                    continuation.resume(returning: granted)
+                }
             }
         }
 #endif
